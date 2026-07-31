@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using QuizBackend.Data;
 
@@ -10,9 +11,11 @@ using QuizBackend.Data;
 namespace QuizBackend.Migrations
 {
     [DbContext(typeof(QuizDbContext))]
-    partial class QuizDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731090927_AddSeenQuestionTable")]
+    partial class AddSeenQuestionTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.17");
@@ -114,62 +117,6 @@ namespace QuizBackend.Migrations
                     b.ToTable("QuizCategories");
                 });
 
-            modelBuilder.Entity("QuizBackend.Models.QuizSession", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("CategoryId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("CurrentQuestionIndex")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsCompleted")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Score")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("StartedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("QuizSessions");
-                });
-
-            modelBuilder.Entity("QuizBackend.Models.QuizSessionQuestion", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("QuestionId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("QuestionOrder")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("QuizSessionId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("QuestionId");
-
-                    b.HasIndex("QuizSessionId");
-
-                    b.ToTable("QuizSessionQuestions");
-                });
-
             modelBuilder.Entity("QuizBackend.Models.SeenQuestion", b =>
                 {
                     b.Property<int>("Id")
@@ -193,38 +140,6 @@ namespace QuizBackend.Migrations
                     b.ToTable("SeenQuestions");
                 });
 
-            modelBuilder.Entity("QuizBackend.Models.UserAnswer", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("AnsweredAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsCorrect")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("PointsAwarded")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("QuestionId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("QuizSessionId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("SelectedOption")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("TimeTakenSeconds")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("UserAnswers");
-                });
-
             modelBuilder.Entity("QuizBackend.Models.Question", b =>
                 {
                     b.HasOne("QuizBackend.Models.QuizCategory", "Category")
@@ -236,38 +151,9 @@ namespace QuizBackend.Migrations
                     b.Navigation("Category");
                 });
 
-            modelBuilder.Entity("QuizBackend.Models.QuizSessionQuestion", b =>
-                {
-                    b.HasOne("QuizBackend.Models.Question", "Question")
-                        .WithMany("SessionQuestions")
-                        .HasForeignKey("QuestionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("QuizBackend.Models.QuizSession", "QuizSession")
-                        .WithMany("SessionQuestions")
-                        .HasForeignKey("QuizSessionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Question");
-
-                    b.Navigation("QuizSession");
-                });
-
-            modelBuilder.Entity("QuizBackend.Models.Question", b =>
-                {
-                    b.Navigation("SessionQuestions");
-                });
-
             modelBuilder.Entity("QuizBackend.Models.QuizCategory", b =>
                 {
                     b.Navigation("Questions");
-                });
-
-            modelBuilder.Entity("QuizBackend.Models.QuizSession", b =>
-                {
-                    b.Navigation("SessionQuestions");
                 });
 #pragma warning restore 612, 618
         }

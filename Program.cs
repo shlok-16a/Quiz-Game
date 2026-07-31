@@ -12,6 +12,8 @@ builder.Services.AddDbContext<QuizDbContext>(options =>
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddScoped<QuestionService>();
+builder.Services.AddScoped<QuizService>();
 
 var app = builder.Build();
 

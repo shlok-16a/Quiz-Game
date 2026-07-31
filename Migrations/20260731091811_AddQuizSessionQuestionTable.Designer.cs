@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using QuizBackend.Data;
 
@@ -10,9 +11,11 @@ using QuizBackend.Data;
 namespace QuizBackend.Migrations
 {
     [DbContext(typeof(QuizDbContext))]
-    partial class QuizDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731091811_AddQuizSessionQuestionTable")]
+    partial class AddQuizSessionQuestionTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.17");
@@ -191,38 +194,6 @@ namespace QuizBackend.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("SeenQuestions");
-                });
-
-            modelBuilder.Entity("QuizBackend.Models.UserAnswer", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("AnsweredAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsCorrect")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("PointsAwarded")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("QuestionId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("QuizSessionId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("SelectedOption")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("TimeTakenSeconds")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("UserAnswers");
                 });
 
             modelBuilder.Entity("QuizBackend.Models.Question", b =>

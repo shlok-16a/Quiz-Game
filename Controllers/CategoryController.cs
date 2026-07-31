@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using QuizBackend.Models;
 using QuizBackend.Services;
+using QuizBackend.DTOs.Category;
 
 namespace QuizBackend.Controllers;
+
 
 [ApiController]
 [Route("api/[controller]")]
@@ -16,22 +18,17 @@ public class CategoryController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<QuizCategory>>> Get()
-    {
-        var categories = await _categoryService.GetAllAsync();
-
-        return Ok(categories);
-    }
+public async Task<ActionResult<List<CategoryResponseDto>>> Get()
+{
+    return Ok(await _categoryService.GetAllAsync());
+}
 
     [HttpPost]
-public async Task<ActionResult<QuizCategory>> Create(QuizCategory category)
+public async Task<ActionResult<CategoryResponseDto>> Create(CreateCategoryDto dto)
 {
-    var createdCategory = await _categoryService.AddAsync(category);
+    var created = await _categoryService.AddAsync(dto);
 
-    return CreatedAtAction(
-        nameof(Get),
-        new { id = createdCategory.Id },
-        createdCategory);
+    return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
 }
 
 [HttpGet("{id}")]

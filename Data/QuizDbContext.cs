@@ -11,4 +11,14 @@ public class QuizDbContext : DbContext
     }
 
     public DbSet<QuizCategory> QuizCategories { get; set; }
+
+    public DbSet<Question> Questions { get; set; }
+
+    public DbSet<SeenQuestion> SeenQuestions { get; set; }
+
+    public DbSet<QuizSession> QuizSessions { get; set; }
+
+    public DbSet<QuizSessionQuestion> QuizSessionQuestions { get; set; }
+
+    public DbSet<UserAnswer> UserAnswers { get; set; }
 }
