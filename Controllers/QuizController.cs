@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QuizBackend.DTOs.Quiz;
 using QuizBackend.Services;
 
 namespace QuizBackend.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class QuizController : ControllerBase
