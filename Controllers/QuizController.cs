@@ -20,7 +20,10 @@ public class QuizController : ControllerBase
     [HttpPost("start")]
     public async Task<ActionResult<StartQuizResponseDto>> StartQuiz(StartQuizRequestDto dto)
     {
-        var result = await _quizService.StartQuizAsync(dto);
+        var userId = int.Parse(
+            User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+
+        var result = await _quizService.StartQuizAsync(userId, dto);
 
         return Ok(result);
     }

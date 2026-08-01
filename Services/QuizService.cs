@@ -14,7 +14,7 @@ public class QuizService
         _context = context;
     }
 
-    public async Task<StartQuizResponseDto> StartQuizAsync(StartQuizRequestDto dto)
+    public async Task<StartQuizResponseDto> StartQuizAsync(int userId, StartQuizRequestDto dto)
     {
         // Step 1 - Validate Category
         var category = await _context.QuizCategories
@@ -60,7 +60,7 @@ public class QuizService
 
         var session = new QuizSession
         {
-            UserId = dto.UserId,
+            UserId = userId,
             CategoryId = dto.CategoryId,
             StartedAt = DateTime.UtcNow,
             Score = 0,
@@ -85,7 +85,7 @@ public class QuizService
 
             _context.SeenQuestions.Add(new SeenQuestion
             {
-                UserId = dto.UserId,
+                UserId = userId,
                 CategoryId = dto.CategoryId,
                 QuestionId = question.Id
             });
