@@ -44,4 +44,14 @@ public class QuizController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("history")]
+    public async Task<ActionResult<List<QuizHistoryDto>>> GetHistory()
+    {
+        var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+
+        var result = await _quizService.GetQuizHistoryAsync(userId);
+
+        return Ok(result);
+    }
 }

@@ -240,4 +240,9 @@ public class QuizService
             CompletedAt = session.CompletedAt
         };
     }
+
+    public async Task<List<QuizHistoryDto>> GetQuizHistoryAsync(int userId)
+    {
+        throw new NotImplementedException();
+    }
 }
