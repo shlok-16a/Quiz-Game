@@ -7,6 +7,9 @@ public class QuizSession
     // User playing the quiz
     public int UserId { get; set; }
 
+    // Quiz being played (admin-created)
+    public int? QuizId { get; set; }
+
     // Selected Category
     public int CategoryId { get; set; }
 

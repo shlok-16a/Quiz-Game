@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Text;
+using CsvHelper;
+using CsvHelper.Configuration;
 using Microsoft.EntityFrameworkCore;
 using QuizBackend.Data;
 using QuizBackend.DTOs.Question;
@@ -14,10 +18,27 @@ public class QuestionService
         _context = context;
     }
 
-    public async Task<List<QuestionResponseDto>> GetAllAsync()
+    public async Task<List<QuestionResponseDto>> GetAllAsync(
+        int? categoryId = null,
+        string? search = null,
+        string? difficulty = null)
     {
-        return await _context.Questions
-            .Include(q => q.Category)
+        var query = _context.Questions.AsQueryable();
+
+        if (categoryId.HasValue && categoryId.Value > 0)
+            query = query.Where(q => q.CategoryId == categoryId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(q => q.QuestionText.Contains(term));
+        }
+
+        if (!string.IsNullOrWhiteSpace(difficulty))
+            query = query.Where(q => q.Difficulty == difficulty);
+
+        return await query
+            .OrderByDescending(q => q.Id)
             .Select(q => new QuestionResponseDto
             {
                 Id = q.Id,
@@ -69,6 +90,31 @@ public class QuestionService
         };
     }
 
+    public async Task<bool> UpdateAsync(int id, UpdateQuestionDto dto)
+    {
+        var question = await _context.Questions.FindAsync(id);
+
+        if (question == null)
+            return false;
+
+        var category = await _context.QuizCategories.FindAsync(dto.CategoryId);
+
+        if (category == null)
+            throw new Exception("Category not found.");
+
+        question.QuestionText = dto.QuestionText;
+        question.Option1 = dto.Option1;
+        question.Option2 = dto.Option2;
+        question.Option3 = dto.Option3;
+        question.CorrectOption = dto.CorrectOption;
+        question.Difficulty = dto.Difficulty;
+        question.CategoryId = dto.CategoryId;
+
+        await _context.SaveChangesAsync();
+
+        return true;
+    }
+
     public async Task<bool> DeleteAsync(int id)
     {
         var question = await _context.Questions.FindAsync(id);
@@ -82,4 +128,89 @@ public class QuestionService
 
         return true;
     }
-}   
+
+    public async Task<ImportQuestionsResultDto> ImportFromCsvAsync(int categoryId, Stream csvStream)
+    {
+        var result = new ImportQuestionsResultDto();
+
+        var category = await _context.QuizCategories.FindAsync(categoryId);
+
+        if (category == null)
+            throw new Exception("Category not found.");
+
+        using var reader = new StreamReader(csvStream, Encoding.UTF8);
+        using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+        {
+            HasHeaderRecord = true,
+            TrimOptions = TrimOptions.Trim,
+            MissingFieldFound = null,
+            BadDataFound = null
+        });
+
+        var rowNumber = 1; // header
+        var questionsToAdd = new List<Question>();
+
+        await foreach (var record in csv.GetRecordsAsync<CsvQuestionRow>())
+        {
+            rowNumber++;
+
+            var error = ValidateCsvRow(record, rowNumber);
+
+            if (error != null)
+            {
+                result.Failed++;
+                result.Errors.Add(error);
+                continue;
+            }
+
+            questionsToAdd.Add(new Question
+            {
+                QuestionText = record.QuestionText.Trim(),
+                Option1 = record.Option1.Trim(),
+                Option2 = record.Option2.Trim(),
+                Option3 = record.Option3.Trim(),
+                CorrectOption = record.CorrectOption,
+                Difficulty = string.IsNullOrWhiteSpace(record.Difficulty)
+                    ? "Easy"
+                    : record.Difficulty.Trim(),
+                CategoryId = categoryId,
+                CreatedBy = "Admin"
+            });
+        }
+
+        if (questionsToAdd.Count > 0)
+        {
+            _context.Questions.AddRange(questionsToAdd);
+            await _context.SaveChangesAsync();
+            result.Imported = questionsToAdd.Count;
+        }
+
+        return result;
+    }
+
+    private static string? ValidateCsvRow(CsvQuestionRow row, int rowNumber)
+    {
+        if (string.IsNullOrWhiteSpace(row.QuestionText))
+            return $"Row {rowNumber} : Question Text Missing";
+
+        if (string.IsNullOrWhiteSpace(row.Option1) ||
+            string.IsNullOrWhiteSpace(row.Option2) ||
+            string.IsNullOrWhiteSpace(row.Option3))
+            return $"Row {rowNumber} : Options Missing";
+
+        if (row.CorrectOption < 1 || row.CorrectOption > 3)
+            return $"Row {rowNumber} : Invalid Correct Option";
+
+        return null;
+    }
+
+    private class CsvQuestionRow
+    {
+        public string QuestionText { get; set; } = string.Empty;
+        public string Option1 { get; set; } = string.Empty;
+        public string Option2 { get; set; } = string.Empty;
+        public string Option3 { get; set; } = string.Empty;
+        public int CorrectOption { get; set; }
+        public string Difficulty { get; set; } = "Easy";
+    }
+}

@@ -2,5 +2,5 @@ namespace QuizBackend.DTOs.Quiz;
 
 public class StartQuizRequestDto
 {
-    public int CategoryId { get; set; }
+    public int QuizId { get; set; }
 }

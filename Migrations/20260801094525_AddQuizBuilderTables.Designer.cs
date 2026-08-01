@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using QuizBackend.Data;
 
@@ -10,9 +11,11 @@ using QuizBackend.Data;
 namespace QuizBackend.Migrations
 {
     [DbContext(typeof(QuizDbContext))]
-    partial class QuizDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260801094525_AddQuizBuilderTables")]
+    partial class AddQuizBuilderTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.17");
@@ -72,9 +75,6 @@ namespace QuizBackend.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("BronzeMinScore")
-                        .HasColumnType("INTEGER");
-
                     b.Property<int>("CategoryId")
                         .HasColumnType("INTEGER");
 
@@ -84,23 +84,11 @@ namespace QuizBackend.Migrations
                     b.Property<int>("DurationSeconds")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime?>("EndDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("GoldMinScore")
-                        .HasColumnType("INTEGER");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("QuestionCount")
                         .HasColumnType("INTEGER");
-
-                    b.Property<int>("SilverMinScore")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("StartDate")
-                        .HasColumnType("TEXT");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -200,9 +188,6 @@ namespace QuizBackend.Migrations
                     b.Property<int>("CurrentQuestionIndex")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime?>("CurrentQuestionStartedAt")
-                        .HasColumnType("TEXT");
-
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("INTEGER");
 
@@ -228,10 +213,6 @@ namespace QuizBackend.Migrations
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("OptionOrder")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
 
                     b.Property<int>("QuestionId")
                         .HasColumnType("INTEGER");

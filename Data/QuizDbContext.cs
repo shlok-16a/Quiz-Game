@@ -23,4 +23,8 @@ public class QuizDbContext : DbContext
     public DbSet<UserAnswer> UserAnswers { get; set; }
 
     public DbSet<User> Users { get; set; }
+
+    public DbSet<Quiz> Quizzes { get; set; }
+
+    public DbSet<QuizQuestion> QuizQuestions { get; set; }
 }

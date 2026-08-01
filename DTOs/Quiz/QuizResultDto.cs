@@ -10,6 +10,8 @@ public class QuizResultDto
 
     public int WrongAnswers { get; set; }
 
+    public int SkippedAnswers { get; set; }
+
     public int TotalQuestions { get; set; }
 
     public double Percentage { get; set; }

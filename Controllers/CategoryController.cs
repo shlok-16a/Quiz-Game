@@ -1,10 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using QuizBackend.Models;
-using QuizBackend.Services;
 using QuizBackend.DTOs.Category;
+using QuizBackend.Services;
 
 namespace QuizBackend.Controllers;
-
 
 [ApiController]
 [Route("api/[controller]")]
@@ -18,51 +16,49 @@ public class CategoryController : ControllerBase
     }
 
     [HttpGet]
-public async Task<ActionResult<List<CategoryResponseDto>>> Get()
-{
-    return Ok(await _categoryService.GetAllAsync());
-}
-
-    [HttpPost]
-public async Task<ActionResult<CategoryResponseDto>> Create(CreateCategoryDto dto)
-{
-    var created = await _categoryService.AddAsync(dto);
-
-    return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
-}
-
-[HttpGet("{id}")]
-public async Task<ActionResult<QuizCategory>> GetById(int id)
-{
-    var category = await _categoryService.GetByIdAsync(id);
-
-    if (category == null)
+    public async Task<ActionResult<List<CategoryResponseDto>>> Get()
     {
-        return NotFound($"Category with ID {id} not found.");
+        return Ok(await _categoryService.GetAllAsync());
     }
 
-    return Ok(category);
-}
+    [HttpGet("{id}")]
+    public async Task<ActionResult<CategoryResponseDto>> GetById(int id)
+    {
+        var category = await _categoryService.GetByIdAsync(id);
 
-[HttpPut("{id}")]
-public async Task<IActionResult> Update(int id, QuizCategory category)
-{
-    var updated = await _categoryService.UpdateAsync(id, category);
+        if (category == null)
+            return NotFound($"Category with ID {id} not found.");
 
-    if (!updated)
-        return NotFound($"Category with ID {id} not found.");
+        return Ok(category);
+    }
 
-    return NoContent();
-}
+    [HttpPost]
+    public async Task<ActionResult<CategoryResponseDto>> Create(CreateCategoryDto dto)
+    {
+        var created = await _categoryService.AddAsync(dto);
 
-[HttpDelete("{id}")]
-public async Task<IActionResult> Delete(int id)
-{
-    var deleted = await _categoryService.DeleteAsync(id);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
 
-    if (!deleted)
-        return NotFound($"Category with ID {id} not found.");
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(int id, UpdateCategoryDto dto)
+    {
+        var updated = await _categoryService.UpdateAsync(id, dto);
 
-    return NoContent();
-}
+        if (!updated)
+            return NotFound($"Category with ID {id} not found.");
+
+        return NoContent();
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var deleted = await _categoryService.DeleteAsync(id);
+
+        if (!deleted)
+            return NotFound($"Category with ID {id} not found.");
+
+        return NoContent();
+    }
 }

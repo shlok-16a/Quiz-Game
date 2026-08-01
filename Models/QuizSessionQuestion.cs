@@ -13,6 +13,8 @@ public class QuizSessionQuestion
     // Order in which it should appear
     public int QuestionOrder { get; set; }
 
+    public string OptionOrder { get; set; } = "1,2,3";
+
     // Navigation Properties
     public QuizSession QuizSession { get; set; } = null!;
 

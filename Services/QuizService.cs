@@ -16,52 +16,67 @@ public class QuizService
 
     public async Task<StartQuizResponseDto> StartQuizAsync(int userId, StartQuizRequestDto dto)
     {
-        // Step 1 - Validate Category
-        var category = await _context.QuizCategories
-            .FirstOrDefaultAsync(c => c.Id == dto.CategoryId);
+        var quiz = await _context.Quizzes
+            .Include(q => q.Category)
+            .Include(q => q.QuizQuestions)
+            .ThenInclude(qq => qq.Question)
+            .FirstOrDefaultAsync(q => q.Id == dto.QuizId);
 
-        if (category == null)
-        {
-            throw new Exception("Category not found.");
-        }
+        if (quiz == null)
+            throw new Exception("Quiz not found.");
 
-        // Step 2
-        // Get Questions
+        if (!quiz.IsActive)
+            throw new Exception("This quiz is not active.");
 
-        // Step 3
-        // Remove Seen Questions
+        var pool = quiz.QuizQuestions
+            .OrderBy(qq => qq.QuestionOrder)
+            .Select(qq => qq.Question)
+            .Where(q => q.IsActive)
+            .ToList();
 
-        // Step 4
-        // Randomize
+        if (!pool.Any())
+            throw new Exception("This quiz has no questions.");
 
-        // Step 5
-        // Create Session
+        var poolIds = pool.Select(q => q.Id).ToHashSet();
 
-        // Step 6
-        // Save Session Questions
-
-        // Step 7
-        // Return First Question
-
-        var questions = await _context.Questions
-            .Where(q => q.CategoryId == dto.CategoryId && q.IsActive)
+        var seenIds = await _context.SeenQuestions
+            .Where(s =>
+                s.UserId == userId &&
+                s.CategoryId == quiz.CategoryId &&
+                poolIds.Contains(s.QuestionId))
+            .Select(s => s.QuestionId)
             .ToListAsync();
 
-        if (!questions.Any())
+        var unseen = pool.Where(q => !seenIds.Contains(q.Id)).ToList();
+
+        // Pool exhausted for this user → reset seen for this quiz's questions, then reuse full pool
+        if (!unseen.Any())
         {
-            throw new Exception("No questions found for this category.");
+            var seenToClear = _context.SeenQuestions.Where(s =>
+                s.UserId == userId &&
+                s.CategoryId == quiz.CategoryId &&
+                poolIds.Contains(s.QuestionId));
+
+            _context.SeenQuestions.RemoveRange(seenToClear);
+            await _context.SaveChangesAsync();
+
+            unseen = pool;
         }
 
-        // Randomize questions
-        var selectedQuestions = questions
-            .OrderBy(q => Guid.NewGuid())
-            .Take(category.QuestionCount)
+        var takeCount = quiz.QuestionCount > 0
+            ? Math.Min(quiz.QuestionCount, unseen.Count)
+            : unseen.Count;
+
+        var selectedQuestions = unseen
+            .OrderBy(_ => Guid.NewGuid())
+            .Take(takeCount)
             .ToList();
 
         var session = new QuizSession
         {
             UserId = userId,
-            CategoryId = dto.CategoryId,
+            QuizId = quiz.Id,
+            CategoryId = quiz.CategoryId,
             StartedAt = DateTime.UtcNow,
             Score = 0,
             CurrentQuestionIndex = 0,
@@ -69,11 +84,9 @@ public class QuizService
         };
 
         _context.QuizSessions.Add(session);
-
         await _context.SaveChangesAsync();
 
         int order = 1;
-
         foreach (var question in selectedQuestions)
         {
             _context.QuizSessionQuestions.Add(new QuizSessionQuestion
@@ -86,7 +99,7 @@ public class QuizService
             _context.SeenQuestions.Add(new SeenQuestion
             {
                 UserId = userId,
-                CategoryId = dto.CategoryId,
+                CategoryId = quiz.CategoryId,
                 QuestionId = question.Id
             });
         }
@@ -99,6 +112,8 @@ public class QuizService
         {
             SessionId = session.Id,
             TotalQuestions = selectedQuestions.Count,
+            DurationSeconds = quiz.DurationSeconds,
+            Title = quiz.Title,
             FirstQuestion = new PlayQuestionDto
             {
                 Id = firstQuestion.Id,
@@ -134,7 +149,8 @@ public class QuizService
             throw new Exception("Question not found.");
         }
 
-        bool isCorrect = question.CorrectOption == dto.SelectedOption;
+        bool isCorrect;
+        int points;
 
         var category = await _context.QuizCategories
             .FirstOrDefaultAsync(c => c.Id == session.CategoryId);
@@ -144,9 +160,19 @@ public class QuizService
             throw new Exception("Category not found.");
         }
 
-        int points = isCorrect
-            ? category.CorrectPoints
-            : category.WrongPoints;
+        if (dto.SelectedOption == 0)
+        {
+            isCorrect = false;
+            points = 0;
+        }
+        else
+        {
+            isCorrect = question.CorrectOption == dto.SelectedOption;
+
+            points = isCorrect
+                ? category.CorrectPoints
+                : category.WrongPoints;
+        }
 
         _context.UserAnswers.Add(new UserAnswer
         {
@@ -221,7 +247,10 @@ public class QuizService
 
         int correctAnswers = answers.Count(a => a.IsCorrect);
 
-        int wrongAnswers = answers.Count(a => !a.IsCorrect);
+        int skippedAnswers = answers.Count(a => a.SelectedOption == 0);
+
+        int wrongAnswers = answers.Count(a =>
+            !a.IsCorrect && a.SelectedOption != 0);
 
         int totalQuestions = answers.Count;
 
@@ -235,6 +264,7 @@ public class QuizService
             Score = session.Score,
             CorrectAnswers = correctAnswers,
             WrongAnswers = wrongAnswers,
+            SkippedAnswers = skippedAnswers,
             TotalQuestions = totalQuestions,
             Percentage = percentage,
             CompletedAt = session.CompletedAt

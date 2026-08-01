@@ -11,4 +11,10 @@ public class PlayQuestionDto
     public string Option2 { get; set; } = string.Empty;
 
     public string Option3 { get; set; } = string.Empty;
+
+    public int QuestionNumber { get; set; }
+
+    public int CurrentScore { get; set; }
+
+    public int TimerSeconds { get; set; }
 }
