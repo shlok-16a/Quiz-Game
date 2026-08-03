@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Categories</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <h1>Quiz Admin</h1>
+        <a href="admin-dashboard.html">Dashboard</a>
+        <a class="active" href="admin-categories.html">Categories</a>
+        <a href="admin-questions.html">Questions</a>
+        <a href="admin-quizzes.html">Make Quiz</a>
+        <a href="admin-upload.html">CSV Upload</a>
+        <button class="secondary" onclick="adminLogout()">Logout</button>
+    </aside>
+
+    <main class="content">
+        <div class="row" style="justify-content: space-between;">
+            <h2>Quiz Categories</h2>
+            <button onclick="toggleForm(true)">+ Add Category</button>
+        </div>
+
+        <div class="card" id="formCard" style="display:none;">
+            <h3 id="formTitle">Add Category</h3>
+            <input type="hidden" id="editId">
+
+            <label>Category Name</label>
+            <input id="name">
+
+            <label>Description</label>
+            <textarea id="description"></textarea>
+
+            <label>Cover Image URL</label>
+            <input id="coverImageUrl">
+
+            <label>Rules</label>
+            <textarea id="rulesText"></textarea>
+
+            <label>Correct Points</label>
+            <input id="correctPoints" type="number" value="10">
+
+            <label>Wrong Points</label>
+            <input id="wrongPoints" type="number" value="-5">
+
+            <label>Question Count</label>
+            <input id="questionCount" type="number" value="10">
+
+            <label>Question Timer (seconds)</label>
+            <input id="questionTimerSeconds" type="number" value="10">
+
+            <label>
+                <input id="isActive" type="checkbox" checked style="width:auto;">
+                Is Active
+            </label>
+
+            <br><br>
+            <div class="row">
+                <button onclick="saveCategory()">Save</button>
+                <button class="secondary" onclick="toggleForm(false)">Cancel</button>
+            </div>
+        </div>
+
+        <div id="list"></div>
+    </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    requireAdmin();
+    let categoriesCache = [];
+
+    function toggleForm(show, category = null) {
+        document.getElementById("formCard").style.display = show ? "block" : "none";
+        document.getElementById("formTitle").innerText = category ? "Edit Category" : "Add Category";
+        document.getElementById("editId").value = category?.id || "";
+        document.getElementById("name").value = category?.name || "";
+        document.getElementById("description").value = category?.description || "";
+        document.getElementById("coverImageUrl").value = category?.coverImageUrl || "";
+        document.getElementById("rulesText").value = category?.rulesText || "";
+        document.getElementById("correctPoints").value = category?.correctPoints ?? 10;
+        document.getElementById("wrongPoints").value = category?.wrongPoints ?? -5;
+        document.getElementById("questionCount").value = category?.questionCount ?? 10;
+        document.getElementById("questionTimerSeconds").value = category?.questionTimerSeconds ?? 10;
+        document.getElementById("isActive").checked = category?.isActive ?? true;
+    }
+
+    function getFormData() {
+        return {
+            name: document.getElementById("name").value.trim(),
+            description: document.getElementById("description").value.trim(),
+            coverImageUrl: document.getElementById("coverImageUrl").value.trim(),
+            rulesText: document.getElementById("rulesText").value.trim(),
+            correctPoints: Number(document.getElementById("correctPoints").value),
+            wrongPoints: Number(document.getElementById("wrongPoints").value),
+            questionCount: Number(document.getElementById("questionCount").value),
+            questionTimerSeconds: Number(document.getElementById("questionTimerSeconds").value),
+            isActive: document.getElementById("isActive").checked
+        };
+    }
+
+    async function saveCategory() {
+        const data = getFormData();
+        if (!data.name) {
+            alert("Category name is required.");
+            return;
+        }
+
+        const id = document.getElementById("editId").value;
+
+        try {
+            if (id) await apiSend(`/api/Category/${id}`, "PUT", data);
+            else await apiSend("/api/Category", "POST", data);
+            toggleForm(false);
+            await loadCategories();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function deleteCategory(id, name) {
+        if (!confirm(`Delete category "${name}"?`)) return;
+        try {
+            await apiSend(`/api/Category/${id}`, "DELETE");
+            await loadCategories();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    function escapeHtml(text) {
+        return String(text)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
+    }
+
+    async function loadCategories() {
+        categoriesCache = await apiGet("/api/Category");
+        const list = document.getElementById("list");
+
+        if (!categoriesCache.length) {
+            list.innerHTML = `<div class="card muted">No categories yet.</div>`;
+            return;
+        }
+
+        list.innerHTML = categoriesCache.map(c => `
+            <div class="card">
+                <h3>${escapeHtml(c.name)}</h3>
+                <p class="muted">${escapeHtml(c.description || "No description")}</p>
+                <p>Question Count : ${c.questionCount}</p>
+                <p>Timer : ${c.questionTimerSeconds} sec</p>
+                <p>+${c.correctPoints} / ${c.wrongPoints}</p>
+                <p>Status : ${c.isActive ? "Active" : "Inactive"}</p>
+                <div class="row">
+                    <button class="secondary" onclick="editCategory(${c.id})">Edit</button>
+                    <button class="danger" onclick="deleteCategory(${c.id}, '${String(c.name).replace(/'/g, "\\'")}')">Delete</button>
+                </div>
+            </div>
+        `).join("");
+    }
+
+    function editCategory(id) {
+        const category = categoriesCache.find(c => c.id === id);
+        if (!category) return;
+        toggleForm(true, category);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    loadCategories().catch(err => alert(err.message));
+</script>
+</body>
+</html>

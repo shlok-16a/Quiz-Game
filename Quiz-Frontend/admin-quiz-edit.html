@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Quiz</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <h1>Quiz Admin</h1>
+        <a href="admin-dashboard.html">Dashboard</a>
+        <a href="admin-categories.html">Categories</a>
+        <a href="admin-questions.html">Questions</a>
+        <a class="active" href="admin-quizzes.html">Make Quiz</a>
+        <a href="admin-upload.html">CSV Upload</a>
+        <button type="button" class="secondary" onclick="adminLogout()">Logout</button>
+    </aside>
+
+    <main class="content">
+        <p><a href="admin-quizzes.html">← Back to quizzes</a></p>
+        <h2 id="quizTitle">Edit Quiz</h2>
+        <p id="quizMeta" class="muted"></p>
+
+        <div class="card">
+            <h3>Quiz Settings</h3>
+            <label>Title</label>
+            <input id="title">
+
+            <label>Total Questions (target)</label>
+            <input id="questionCount" type="number" min="1">
+
+            <label>Duration (minutes)</label>
+            <input id="durationMinutes" type="number" min="1">
+
+            <label>
+                <input id="isActive" type="checkbox" style="width:auto;">
+                Active (players can see & play)
+            </label>
+
+            <br><br>
+            <button type="button" onclick="saveSettings()">Save Settings</button>
+        </div>
+
+        <div class="card">
+            <h3>Add Questions</h3>
+            <div class="row">
+                <button type="button" onclick="addRandom()">Select Random from Category</button>
+            </div>
+            <br>
+            <label>Or pick manually from category pool</label>
+            <select id="poolSelect" multiple size="8" style="max-width:100%; height:160px;"></select>
+            <br><br>
+            <button type="button" onclick="addSelected()">Add Selected</button>
+        </div>
+
+        <div class="card">
+            <h3>Upload CSV into this Quiz</h3>
+            <p class="muted">Creates questions in the category and adds them to this quiz.</p>
+            <input id="csvFile" type="file" accept=".csv">
+            <br><br>
+            <button type="button" onclick="uploadCsv()">Upload CSV</button>
+            <div id="importResult" style="margin-top:12px;"></div>
+        </div>
+
+        <div class="card">
+            <h3>Questions in this Quiz (<span id="assignedCount">0</span>)</h3>
+            <div id="quizQuestions"></div>
+        </div>
+    </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    requireAdmin();
+
+    const quizId = Number(new URLSearchParams(location.search).get("id"));
+    if (!quizId) {
+        alert("Missing quiz id");
+        location.href = "admin-quizzes.html";
+    }
+
+    let quiz = null;
+    let assigned = [];
+
+    async function loadQuiz() {
+        quiz = await apiGet(`/api/QuizBuilder/${quizId}`);
+        document.getElementById("quizTitle").innerText = quiz.title;
+        document.getElementById("quizMeta").innerText =
+            `Category: ${quiz.categoryName} · Assigned ${quiz.assignedQuestions}/${quiz.questionCount}`;
+
+        document.getElementById("title").value = quiz.title;
+        document.getElementById("questionCount").value = quiz.questionCount;
+        document.getElementById("durationMinutes").value = Math.max(1, Math.round(quiz.durationSeconds / 60));
+        document.getElementById("isActive").checked = quiz.isActive;
+    }
+
+    async function saveSettings() {
+        const body = {
+            title: document.getElementById("title").value.trim(),
+            questionCount: Number(document.getElementById("questionCount").value),
+            durationSeconds: Number(document.getElementById("durationMinutes").value) * 60,
+            isActive: document.getElementById("isActive").checked
+        };
+
+        try {
+            await apiSend(`/api/QuizBuilder/${quizId}`, "PUT", body);
+            await refreshAll();
+            alert("Settings saved.");
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function loadAssigned() {
+        assigned = await apiGet(`/api/QuizBuilder/${quizId}/questions`);
+        document.getElementById("assignedCount").innerText = assigned.length;
+
+        const box = document.getElementById("quizQuestions");
+        if (!assigned.length) {
+            box.innerHTML = `<p class="muted">No questions yet. Add random, manual, or CSV.</p>`;
+            return;
+        }
+
+        box.innerHTML = assigned.map(q => `
+            <div class="row" style="justify-content:space-between; border-bottom:1px solid #e5e7eb; padding:10px 0;">
+                <div>
+                    <strong>#${q.id}</strong> ${escapeHtml(q.questionText)}
+                    <div class="muted">${escapeHtml(q.difficulty)} · Correct: ${q.correctOption}</div>
+                </div>
+                <button type="button" class="danger" onclick="removeQuestion(${q.id})">Delete</button>
+            </div>
+        `).join("");
+    }
+
+    async function loadPool() {
+        const pool = await apiGet(`/api/Question?categoryId=${quiz.categoryId}`);
+        const assignedIds = new Set(assigned.map(q => q.id));
+        const available = pool.filter(q => !assignedIds.has(q.id));
+
+        document.getElementById("poolSelect").innerHTML = available.map(q =>
+            `<option value="${q.id}">#${q.id} — ${escapeHtml(q.questionText).slice(0, 80)}</option>`
+        ).join("") || `<option disabled>No more questions in category</option>`;
+    }
+
+    function escapeHtml(text) {
+        return String(text ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
+    }
+
+    async function addRandom() {
+        const count = Number(document.getElementById("questionCount").value) || quiz.questionCount;
+        try {
+            await apiSend(`/api/QuizBuilder/${quizId}/random`, "POST", { count });
+            await refreshAll();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function addSelected() {
+        const select = document.getElementById("poolSelect");
+        const questionIds = [...select.selectedOptions].map(o => Number(o.value)).filter(Boolean);
+        if (!questionIds.length) {
+            alert("Select at least one question.");
+            return;
+        }
+
+        try {
+            await apiSend(`/api/QuizBuilder/${quizId}/questions`, "POST", { questionIds });
+            await refreshAll();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function removeQuestion(questionId) {
+        if (!confirm("Remove this question from the quiz?")) return;
+        try {
+            await apiSend(`/api/QuizBuilder/${quizId}/questions/${questionId}`, "DELETE");
+            await refreshAll();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function uploadCsv() {
+        const file = document.getElementById("csvFile").files[0];
+        if (!file) {
+            alert("Choose a CSV file.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/QuizBuilder/${quizId}/import`, {
+                method: "POST",
+                body: formData
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                alert(data.title || data || "Import failed");
+                return;
+            }
+
+            document.getElementById("importResult").innerHTML =
+                `<p class="ok">Imported: ${data.imported}</p>
+                 <p class="err">Failed: ${data.failed}</p>
+                 <ul>${(data.errors || []).map(e => `<li>${e}</li>`).join("")}</ul>`;
+
+            await refreshAll();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function refreshAll() {
+        await loadQuiz();
+        await loadAssigned();
+        await loadPool();
+    }
+
+    refreshAll().catch(err => alert(err.message));
+</script>
+</body>
+</html>

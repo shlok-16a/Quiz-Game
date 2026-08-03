@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSV Upload</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <h1>Quiz Admin</h1>
+        <a href="admin-dashboard.html">Dashboard</a>
+        <a href="admin-categories.html">Categories</a>
+        <a href="admin-questions.html">Questions</a>
+        <a href="admin-quizzes.html">Make Quiz</a>
+        <a class="active" href="admin-upload.html">CSV Upload</a>
+        <button class="secondary" onclick="adminLogout()">Logout</button>
+    </aside>
+
+    <main class="content">
+        <h2>Upload Questions</h2>
+
+        <div class="card">
+            <p class="muted">
+                CSV columns: QuestionText, Option1, Option2, Option3, CorrectOption, Difficulty
+                <br>No Category column — choose the category below.
+            </p>
+
+            <label>Category</label>
+            <select id="categoryId"></select>
+
+            <label>Choose CSV</label>
+            <input id="file" type="file" accept=".csv">
+
+            <br><br>
+            <button onclick="uploadCsv()">Upload</button>
+        </div>
+
+        <div class="card" id="resultCard" style="display:none;">
+            <h3>Import Result</h3>
+            <p class="ok" id="imported"></p>
+            <p class="err" id="failed"></p>
+            <ul id="errors"></ul>
+        </div>
+    </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    requireAdmin();
+
+    async function loadCategories() {
+        const categories = await apiGet("/api/Category");
+        const select = document.getElementById("categoryId");
+        select.innerHTML = categories.map(c =>
+            `<option value="${c.id}">${c.name}</option>`
+        ).join("") || `<option value="">No categories found</option>`;
+    }
+
+    async function uploadCsv() {
+        const categoryId = document.getElementById("categoryId").value;
+        const file = document.getElementById("file").files[0];
+
+        if (!categoryId) {
+            alert("Select a category first.");
+            return;
+        }
+        if (!file) {
+            alert("Choose a CSV file.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("categoryId", categoryId);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/Question/import`, {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                alert(typeof data === "string" ? data : (data.title || "Import failed"));
+                return;
+            }
+
+            document.getElementById("resultCard").style.display = "block";
+            document.getElementById("imported").innerText = `Imported : ${data.imported}`;
+            document.getElementById("failed").innerText = `Failed : ${data.failed}`;
+            document.getElementById("errors").innerHTML =
+                (data.errors || []).map(e => `<li>${e}</li>`).join("") || "<li>No errors</li>";
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    loadCategories().catch(err => alert(err.message));
+</script>
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quiz</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 id="title" style="margin:0;">Quiz</h2>
+        <button type="button" class="secondary" onclick="userLogout()">Logout</button>
+    </div>
+    <p id="timer" class="muted"></p>
+    <p id="progress"></p>
+    <h3 id="question"></h3>
+
+    <button type="button" id="option1"></button>
+    <br><br>
+    <button type="button" id="option2"></button>
+    <br><br>
+    <button type="button" id="option3"></button>
+    <br><br>
+    <button type="button" id="skipBtn">Skip</button>
+
+    <p id="status" style="color: green;"></p>
+
+    <script src="js/api.js"></script>
+    <script>
+        const quiz = JSON.parse(localStorage.getItem("quiz") || "null");
+
+        if (!quiz) {
+            alert("No quiz found. Start from Categories.");
+            window.location.href = "categories.html";
+        }
+
+        const sessionId = quiz.sessionId;
+        const totalQuestions = quiz.totalQuestions || 0;
+        let questionNumber = Number(localStorage.getItem("quizQuestionNumber") || "1");
+        let currentQuestion = quiz.currentQuestion || quiz.firstQuestion;
+        let busy = false;
+        let remainingSeconds = quiz.durationSeconds || 0;
+
+        document.getElementById("title").innerText = quiz.title || "Quiz";
+
+        if (remainingSeconds > 0) {
+            const timerEl = document.getElementById("timer");
+            const tick = () => {
+                const m = Math.floor(remainingSeconds / 60);
+                const s = remainingSeconds % 60;
+                timerEl.innerText = `Time left: ${m}:${String(s).padStart(2, "0")}`;
+                if (remainingSeconds <= 0) {
+                    clearInterval(timerId);
+                    alert("Time is up!");
+                    localStorage.setItem("resultSession", sessionId);
+                    window.location.href = "result.html";
+                    return;
+                }
+                remainingSeconds -= 1;
+            };
+            tick();
+            var timerId = setInterval(tick, 1000);
+        }
+
+        const questionEl = document.getElementById("question");
+        const option1El = document.getElementById("option1");
+        const option2El = document.getElementById("option2");
+        const option3El = document.getElementById("option3");
+        const skipEl = document.getElementById("skipBtn");
+        const progressEl = document.getElementById("progress");
+        const statusEl = document.getElementById("status");
+
+        function setButtonsDisabled(disabled) {
+            option1El.disabled = disabled;
+            option2El.disabled = disabled;
+            option3El.disabled = disabled;
+            skipEl.disabled = disabled;
+        }
+
+        function render(question) {
+            currentQuestion = {
+                id: question.id ?? question.Id,
+                questionText: question.questionText ?? question.QuestionText,
+                option1: question.option1 ?? question.Option1,
+                option2: question.option2 ?? question.Option2,
+                option3: question.option3 ?? question.Option3
+            };
+
+            questionEl.innerText = currentQuestion.questionText;
+            option1El.innerText = currentQuestion.option1;
+            option2El.innerText = currentQuestion.option2;
+            option3El.innerText = currentQuestion.option3;
+            progressEl.innerText = `Question ${questionNumber}` + (totalQuestions ? ` of ${totalQuestions}` : "");
+            statusEl.innerText = "";
+
+            // Persist so a page refresh keeps the current question
+            const saved = JSON.parse(localStorage.getItem("quiz"));
+            saved.currentQuestion = currentQuestion;
+            localStorage.setItem("quiz", JSON.stringify(saved));
+            localStorage.setItem("quizQuestionNumber", String(questionNumber));
+
+            setButtonsDisabled(false);
+        }
+
+        async function submitAnswer(selectedOption) {
+            if (busy) return;
+            busy = true;
+            setButtonsDisabled(true);
+            statusEl.innerText = selectedOption === 0 ? "Skipping..." : "Submitting...";
+
+            try {
+                const token = localStorage.getItem("token");
+                const response = await fetch(`${API_BASE_URL}/api/Quiz/answer`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        questionId: currentQuestion.id,
+                        selectedOption: selectedOption
+                    })
+                });
+
+                const data = await response.json();
+                console.log("Answer response:", data);
+
+                if (!response.ok) {
+                    statusEl.innerText = "Error submitting answer";
+                    busy = false;
+                    setButtonsDisabled(false);
+                    return;
+                }
+
+                if (data.quizCompleted) {
+                    localStorage.setItem("resultSession", sessionId);
+                    localStorage.removeItem("quizQuestionNumber");
+                    window.location.href = "result.html";
+                    return;
+                }
+
+                if (!data.nextQuestion) {
+                    statusEl.innerText = "No next question in response";
+                    busy = false;
+                    return;
+                }
+
+                questionNumber += 1;
+                statusEl.innerText = "Loaded next question";
+                render(data.nextQuestion);
+            } catch (err) {
+                console.error(err);
+                statusEl.innerText = "Network error";
+                setButtonsDisabled(false);
+            } finally {
+                busy = false;
+            }
+        }
+
+        option1El.onclick = () => submitAnswer(1);
+        option2El.onclick = () => submitAnswer(2);
+        option3El.onclick = () => submitAnswer(3);
+        skipEl.onclick = () => submitAnswer(0);
+
+        render(currentQuestion);
+    </script>
+
+</body>
+</html>

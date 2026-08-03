@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Make Quiz</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <h1>Quiz Admin</h1>
+        <a href="admin-dashboard.html">Dashboard</a>
+        <a href="admin-categories.html">Categories</a>
+        <a href="admin-questions.html">Questions</a>
+        <a class="active" href="admin-quizzes.html">Make Quiz</a>
+        <a href="admin-upload.html">CSV Upload</a>
+        <button type="button" class="secondary" onclick="adminLogout()">Logout</button>
+    </aside>
+
+    <main class="content">
+        <div class="row" style="justify-content:space-between;">
+            <h2>Make a Quiz</h2>
+            <button type="button" onclick="showCreate()">+ New Quiz</button>
+        </div>
+
+        <div class="card" id="createCard" style="display:none;">
+            <h3>Create Quiz</h3>
+            <label>Title</label>
+            <input id="title" placeholder="e.g. BGMI Weekly Challenge">
+
+            <label>Category</label>
+            <select id="categoryId"></select>
+
+            <label>Total Questions (target)</label>
+            <input id="questionCount" type="number" value="10" min="1">
+
+            <label>Quiz Duration (minutes)</label>
+            <input id="durationMinutes" type="number" value="10" min="1">
+
+            <label>
+                <input id="isActive" type="checkbox" style="width:auto;">
+                Active (visible to players)
+            </label>
+
+            <br><br>
+            <div class="row">
+                <button type="button" onclick="createQuiz()">Create</button>
+                <button type="button" class="secondary" onclick="hideCreate()">Cancel</button>
+            </div>
+        </div>
+
+        <div id="list"></div>
+    </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    requireAdmin();
+
+    function showCreate() {
+        document.getElementById("createCard").style.display = "block";
+    }
+
+    function hideCreate() {
+        document.getElementById("createCard").style.display = "none";
+    }
+
+    function formatDuration(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return s ? `${m}m ${s}s` : `${m} min`;
+    }
+
+    async function loadCategories() {
+        const categories = await apiGet("/api/Category");
+        document.getElementById("categoryId").innerHTML =
+            categories.map(c => `<option value="${c.id}">${c.name}</option>`).join("")
+            || `<option value="">No categories</option>`;
+    }
+
+    async function createQuiz() {
+        const body = {
+            title: document.getElementById("title").value.trim(),
+            categoryId: Number(document.getElementById("categoryId").value),
+            questionCount: Number(document.getElementById("questionCount").value),
+            durationSeconds: Number(document.getElementById("durationMinutes").value) * 60,
+            isActive: document.getElementById("isActive").checked
+        };
+
+        if (!body.categoryId) {
+            alert("Select a category.");
+            return;
+        }
+
+        try {
+            const created = await apiSend("/api/QuizBuilder", "POST", body);
+            hideCreate();
+            window.location.href = `admin-quiz-edit.html?id=${created.id}`;
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function toggleActive(id, isActive) {
+        try {
+            await apiSend(`/api/QuizBuilder/${id}/active`, "PUT", { isActive: !isActive });
+            await loadQuizzes();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function deleteQuiz(id, title) {
+        if (!confirm(`Delete quiz "${title}"?`)) return;
+        try {
+            await apiSend(`/api/QuizBuilder/${id}`, "DELETE");
+            await loadQuizzes();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function loadQuizzes() {
+        const quizzes = await apiGet("/api/QuizBuilder");
+        const list = document.getElementById("list");
+
+        if (!quizzes.length) {
+            list.innerHTML = `<div class="card muted">No quizzes yet. Create one to get started.</div>`;
+            return;
+        }
+
+        list.innerHTML = quizzes.map(q => `
+            <div class="card">
+                <h3>${q.title}</h3>
+                <p>Category: <strong>${q.categoryName}</strong></p>
+                <p>Questions: ${q.assignedQuestions} / ${q.questionCount}</p>
+                <p>Duration: ${formatDuration(q.durationSeconds)}</p>
+                <p>Status: ${q.isActive ? "✅ Active" : "⏸ Inactive"}</p>
+                <div class="row">
+                    <button type="button" onclick="location.href='admin-quiz-edit.html?id=${q.id}'">Edit Questions</button>
+                    <button type="button" class="secondary" onclick="toggleActive(${q.id}, ${q.isActive})">
+                        ${q.isActive ? "Deactivate" : "Activate"}
+                    </button>
+                    <button type="button" class="danger" onclick="deleteQuiz(${q.id}, '${String(q.title).replace(/'/g, "\\'")}')">Delete</button>
+                </div>
+            </div>
+        `).join("");
+    }
+
+    (async () => {
+        await loadCategories();
+        await loadQuizzes();
+    })().catch(err => alert(err.message));
+</script>
+</body>
+</html>

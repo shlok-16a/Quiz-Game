@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Questions</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <h1>Quiz Admin</h1>
+        <a href="admin-dashboard.html">Dashboard</a>
+        <a href="admin-categories.html">Categories</a>
+        <a class="active" href="admin-questions.html">Questions</a>
+        <a href="admin-quizzes.html">Make Quiz</a>
+        <a href="admin-upload.html">CSV Upload</a>
+        <button type="button" class="secondary" onclick="adminLogout()">Logout</button>
+    </aside>
+
+    <main class="content">
+        <h2>Question Management</h2>
+
+        <div class="card filters">
+            <div>
+                <label>Category</label>
+                <select id="filterCategoryId">
+                    <option value="">All</option>
+                </select>
+            </div>
+            <div>
+                <label>Search</label>
+                <input id="filterSearch" placeholder="Search question text">
+            </div>
+            <div>
+                <label>Difficulty</label>
+                <select id="filterDifficulty">
+                    <option value="">All</option>
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                </select>
+            </div>
+            <div style="align-self:end;">
+                <button type="button" id="filterBtn">Filter</button>
+            </div>
+        </div>
+
+        <p id="resultCount" class="muted"></p>
+
+        <div class="card" id="editCard" style="display:none;">
+            <h3>Edit Question</h3>
+            <input type="hidden" id="editId">
+
+            <label>Question Text</label>
+            <textarea id="questionText"></textarea>
+
+            <label>Option 1</label>
+            <input id="option1">
+
+            <label>Option 2</label>
+            <input id="option2">
+
+            <label>Option 3</label>
+            <input id="option3">
+
+            <label>Correct Option (1-3)</label>
+            <input id="correctOption" type="number" min="1" max="3">
+
+            <label>Difficulty</label>
+            <select id="editDifficulty">
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+            </select>
+
+            <label>Category</label>
+            <select id="editCategoryId"></select>
+
+            <br><br>
+            <div class="row">
+                <button type="button" onclick="saveQuestion()">Save</button>
+                <button type="button" class="secondary" onclick="closeEdit()">Cancel</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Question</th>
+                        <th>Category</th>
+                        <th>Difficulty</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="rows"></tbody>
+            </table>
+        </div>
+    </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    requireAdmin();
+
+    let categories = [];
+    let questionsById = {};
+
+    function escapeHtml(text) {
+        return String(text ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
+    }
+
+    async function loadCategories() {
+        categories = await apiGet("/api/Category");
+
+        document.getElementById("filterCategoryId").innerHTML =
+            `<option value="">All</option>` +
+            categories.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+
+        document.getElementById("editCategoryId").innerHTML =
+            categories.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+    }
+
+    async function loadQuestions() {
+        const categoryId = document.getElementById("filterCategoryId").value;
+        const search = document.getElementById("filterSearch").value.trim();
+        const difficulty = document.getElementById("filterDifficulty").value;
+
+        const params = new URLSearchParams();
+        if (categoryId) params.append("categoryId", categoryId);
+        if (search) params.append("search", search);
+        if (difficulty) params.append("difficulty", difficulty);
+
+        const query = params.toString();
+        const url = query ? `/api/Question?${query}` : "/api/Question";
+
+        console.log("Filter request:", url);
+
+        const questions = await apiGet(url);
+        questionsById = {};
+        questions.forEach(q => { questionsById[q.id] = q; });
+
+        document.getElementById("resultCount").innerText =
+            `Showing ${questions.length} question(s)` +
+            (categoryId ? ` for selected category` : "");
+
+        const rows = document.getElementById("rows");
+
+        if (!questions.length) {
+            rows.innerHTML = `<tr><td colspan="5" class="muted">No questions found.</td></tr>`;
+            return;
+        }
+
+        rows.innerHTML = questions.map(q => `
+            <tr>
+                <td>${q.id}</td>
+                <td>${escapeHtml(q.questionText)}</td>
+                <td>${escapeHtml(q.categoryName)}</td>
+                <td>${escapeHtml(q.difficulty)}</td>
+                <td class="row">
+                    <button type="button" class="secondary" data-edit="${q.id}">Edit</button>
+                    <button type="button" class="danger" data-delete="${q.id}">Delete</button>
+                </td>
+            </tr>
+        `).join("");
+
+        rows.querySelectorAll("[data-edit]").forEach(btn => {
+            btn.onclick = () => openEdit(Number(btn.dataset.edit));
+        });
+
+        rows.querySelectorAll("[data-delete]").forEach(btn => {
+            btn.onclick = () => deleteQuestion(Number(btn.dataset.delete));
+        });
+    }
+
+    function openEdit(id) {
+        const q = questionsById[id];
+        if (!q) return;
+
+        document.getElementById("editCard").style.display = "block";
+        document.getElementById("editId").value = q.id;
+        document.getElementById("questionText").value = q.questionText;
+        document.getElementById("option1").value = q.option1;
+        document.getElementById("option2").value = q.option2;
+        document.getElementById("option3").value = q.option3;
+        document.getElementById("correctOption").value = q.correctOption;
+        document.getElementById("editDifficulty").value = q.difficulty || "Easy";
+        document.getElementById("editCategoryId").value = q.categoryId;
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function closeEdit() {
+        document.getElementById("editCard").style.display = "none";
+    }
+
+    async function saveQuestion() {
+        const id = document.getElementById("editId").value;
+        const body = {
+            questionText: document.getElementById("questionText").value.trim(),
+            option1: document.getElementById("option1").value.trim(),
+            option2: document.getElementById("option2").value.trim(),
+            option3: document.getElementById("option3").value.trim(),
+            correctOption: Number(document.getElementById("correctOption").value),
+            difficulty: document.getElementById("editDifficulty").value,
+            categoryId: Number(document.getElementById("editCategoryId").value)
+        };
+
+        try {
+            await apiSend(`/api/Question/${id}`, "PUT", body);
+            closeEdit();
+            await loadQuestions();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function deleteQuestion(id) {
+        if (!confirm(`Delete question #${id}?`)) return;
+        try {
+            await apiSend(`/api/Question/${id}`, "DELETE");
+            await loadQuestions();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    document.getElementById("filterBtn").onclick = () => loadQuestions();
+    document.getElementById("filterCategoryId").onchange = () => loadQuestions();
+    document.getElementById("filterDifficulty").onchange = () => loadQuestions();
+    document.getElementById("filterSearch").onkeydown = (e) => {
+        if (e.key === "Enter") loadQuestions();
+    };
+
+    (async () => {
+        await loadCategories();
+        await loadQuestions();
+    })().catch(err => alert(err.message));
+</script>
+</body>
+</html>

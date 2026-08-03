@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quiz Login</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<h2>Quiz Login</h2>
+
+<div class="role-row">
+    <label>
+        <input type="radio" name="role" value="user" checked onchange="onRoleChange()">
+        User
+    </label>
+    <label>
+        <input type="radio" name="role" value="admin" onchange="onRoleChange()">
+        Admin
+    </label>
+</div>
+
+<br>
+
+<input id="email" placeholder="Email">
+
+<br><br>
+
+<input id="password" type="password" placeholder="Password">
+
+<br><br>
+
+<button onclick="login()">Login</button>
+
+<p id="loginHint" class="muted">Player: use your registered email</p>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+
+</body>
+</html>

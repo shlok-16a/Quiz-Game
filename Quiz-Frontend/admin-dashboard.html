@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <h1>Quiz Admin</h1>
+        <a class="active" href="admin-dashboard.html">Dashboard</a>
+        <a href="admin-categories.html">Categories</a>
+        <a href="admin-questions.html">Questions</a>
+        <a href="admin-quizzes.html">Make Quiz</a>
+        <a href="admin-upload.html">CSV Upload</a>
+        <button class="secondary" onclick="adminLogout()">Logout</button>
+    </aside>
+
+    <main class="content">
+        <h2>Quiz Admin Dashboard</h2>
+        <div class="stats">
+            <div class="card stat"><h3>Total Categories</h3><p id="categories">-</p></div>
+            <div class="card stat"><h3>Total Questions</h3><p id="questions">-</p></div>
+            <div class="card stat"><h3>Total Players</h3><p id="players">-</p></div>
+            <div class="card stat"><h3>Total Quiz Sessions</h3><p id="sessions">-</p></div>
+        </div>
+    </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    requireAdmin();
+
+    async function loadStats() {
+        const data = await apiGet("/api/Admin/stats");
+        document.getElementById("categories").innerText = data.totalCategories;
+        document.getElementById("questions").innerText = data.totalQuestions;
+        document.getElementById("players").innerText = data.totalPlayers;
+        document.getElementById("sessions").innerText = data.totalQuizSessions;
+    }
+
+    loadStats().catch(err => alert(err.message));
+</script>
+</body>
+</html>
