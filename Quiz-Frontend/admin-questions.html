@@ -17,7 +17,10 @@
     </aside>
 
     <main class="content">
-        <h2>Question Management</h2>
+        <div class="row" style="justify-content:space-between; align-items:center;">
+            <h2>Question Management</h2>
+            <button type="button" onclick="openCreate()">+ Add Question</button>
+        </div>
 
         <div class="card filters">
             <div>
@@ -44,10 +47,16 @@
             </div>
         </div>
 
-        <p id="resultCount" class="muted"></p>
+        <div class="bulk-bar">
+            <p id="resultCount" class="muted"></p>
+            <div class="row">
+                <span id="selectedCount" class="muted">0 selected</span>
+                <button type="button" class="danger" id="deleteSelectedBtn" disabled>Delete Selected</button>
+            </div>
+        </div>
 
         <div class="card" id="editCard" style="display:none;">
-            <h3>Edit Question</h3>
+            <h3 id="editCardTitle">Edit Question</h3>
             <input type="hidden" id="editId">
 
             <label>Question Text</label>
@@ -63,7 +72,7 @@
             <input id="option3">
 
             <label>Correct Option (1-3)</label>
-            <input id="correctOption" type="number" min="1" max="3">
+            <input id="correctOption" type="number" min="1" max="3" value="1">
 
             <label>Difficulty</label>
             <select id="editDifficulty">
@@ -86,6 +95,9 @@
             <table>
                 <thead>
                     <tr>
+                        <th class="col-check">
+                            <input type="checkbox" id="selectAll" title="Select all">
+                        </th>
                         <th>ID</th>
                         <th>Question</th>
                         <th>Category</th>
@@ -112,6 +124,31 @@
             .replaceAll("<", "&lt;")
             .replaceAll(">", "&gt;")
             .replaceAll('"', "&quot;");
+    }
+
+    function getSelectedIds() {
+        return [...document.querySelectorAll(".row-check:checked")]
+            .map(cb => Number(cb.value));
+    }
+
+    function updateSelectionUi() {
+        const checks = [...document.querySelectorAll(".row-check")];
+        const selected = checks.filter(cb => cb.checked).length;
+        const selectAll = document.getElementById("selectAll");
+        const deleteBtn = document.getElementById("deleteSelectedBtn");
+
+        document.getElementById("selectedCount").innerText =
+            `${selected} selected`;
+        deleteBtn.disabled = selected === 0;
+
+        if (!checks.length) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+            return;
+        }
+
+        selectAll.checked = selected === checks.length;
+        selectAll.indeterminate = selected > 0 && selected < checks.length;
     }
 
     async function loadCategories() {
@@ -151,12 +188,16 @@
         const rows = document.getElementById("rows");
 
         if (!questions.length) {
-            rows.innerHTML = `<tr><td colspan="5" class="muted">No questions found.</td></tr>`;
+            rows.innerHTML = `<tr><td colspan="6" class="muted">No questions found.</td></tr>`;
+            updateSelectionUi();
             return;
         }
 
         rows.innerHTML = questions.map(q => `
             <tr>
+                <td class="col-check">
+                    <input type="checkbox" class="row-check" value="${q.id}">
+                </td>
                 <td>${q.id}</td>
                 <td>${escapeHtml(q.questionText)}</td>
                 <td>${escapeHtml(q.categoryName)}</td>
@@ -175,6 +216,34 @@
         rows.querySelectorAll("[data-delete]").forEach(btn => {
             btn.onclick = () => deleteQuestion(Number(btn.dataset.delete));
         });
+
+        rows.querySelectorAll(".row-check").forEach(cb => {
+            cb.onchange = updateSelectionUi;
+        });
+
+        updateSelectionUi();
+    }
+
+    function openCreate() {
+        document.getElementById("editCard").style.display = "block";
+        document.getElementById("editCardTitle").innerText = "Add Question";
+        document.getElementById("editId").value = "";
+        document.getElementById("questionText").value = "";
+        document.getElementById("option1").value = "";
+        document.getElementById("option2").value = "";
+        document.getElementById("option3").value = "";
+        document.getElementById("correctOption").value = "1";
+        document.getElementById("editDifficulty").value = "Easy";
+
+        const filterCategory = document.getElementById("filterCategoryId").value;
+        if (filterCategory) {
+            document.getElementById("editCategoryId").value = filterCategory;
+        } else if (categories.length) {
+            document.getElementById("editCategoryId").value = categories[0].id;
+        }
+
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        document.getElementById("questionText").focus();
     }
 
     function openEdit(id) {
@@ -182,6 +251,7 @@
         if (!q) return;
 
         document.getElementById("editCard").style.display = "block";
+        document.getElementById("editCardTitle").innerText = "Edit Question";
         document.getElementById("editId").value = q.id;
         document.getElementById("questionText").value = q.questionText;
         document.getElementById("option1").value = q.option1;
@@ -209,8 +279,27 @@
             categoryId: Number(document.getElementById("editCategoryId").value)
         };
 
+        if (!body.questionText || !body.option1 || !body.option2 || !body.option3) {
+            alert("Fill question text and all 3 options.");
+            return;
+        }
+
+        if (!body.categoryId) {
+            alert("Select a category.");
+            return;
+        }
+
+        if (body.correctOption < 1 || body.correctOption > 3) {
+            alert("Correct option must be 1, 2, or 3.");
+            return;
+        }
+
         try {
-            await apiSend(`/api/Question/${id}`, "PUT", body);
+            if (id) {
+                await apiSend(`/api/Question/${id}`, "PUT", body);
+            } else {
+                await apiSend("/api/Question", "POST", body);
+            }
             closeEdit();
             await loadQuestions();
         } catch (err) {
@@ -228,6 +317,32 @@
         }
     }
 
+    async function deleteSelected() {
+        const ids = getSelectedIds();
+        if (!ids.length) return;
+
+        if (!confirm(`Delete ${ids.length} selected question(s)?`)) return;
+
+        const deleteBtn = document.getElementById("deleteSelectedBtn");
+        deleteBtn.disabled = true;
+
+        try {
+            await apiSend("/api/Question/bulk-delete", "POST", { ids });
+            await loadQuestions();
+        } catch (err) {
+            alert(err.message);
+            updateSelectionUi();
+        }
+    }
+
+    document.getElementById("selectAll").onchange = (e) => {
+        document.querySelectorAll(".row-check").forEach(cb => {
+            cb.checked = e.target.checked;
+        });
+        updateSelectionUi();
+    };
+
+    document.getElementById("deleteSelectedBtn").onclick = () => deleteSelected();
     document.getElementById("filterBtn").onclick = () => loadQuestions();
     document.getElementById("filterCategoryId").onchange = () => loadQuestions();
     document.getElementById("filterDifficulty").onchange = () => loadQuestions();

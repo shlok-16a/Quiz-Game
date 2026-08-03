@@ -30,18 +30,32 @@ async function loadQuizzes() {
     }
 
     quizzes.forEach(quiz => {
-        const mins = Math.max(1, Math.round(quiz.durationSeconds / 60));
+        const timerSec = Math.max(1, Number(quiz.durationSeconds) || 10);
+        const from = formatQuizIst(quiz.startDate);
+        const until = formatQuizIst(quiz.endDate);
+        const action = quiz.hasAttempted
+            ? `<button type="button" disabled>Already Attempted</button>`
+            : `<button type="button" onclick="startQuiz(${quiz.id})">Start Quiz</button>`;
+
         container.innerHTML += `
             <div class="card">
                 <h3>${quiz.title}</h3>
                 <p>Category: ${quiz.categoryName}</p>
                 <p>Questions: ${quiz.assignedQuestions}</p>
-                <p>Duration: ${mins} min</p>
-                <button onclick="startQuiz(${quiz.id})">Start Quiz</button>
+                <p>Timer: ${timerSec} sec / question</p>
+                ${from ? `<p class="muted">Available from: ${from}</p>` : ""}
+                ${until ? `<p class="muted">Available until: ${until}</p>` : ""}
+                ${action}
             </div>
             <br>
         `;
     });
+}
+
+function formatQuizIst(iso) {
+    if (!iso) return null;
+    const text = formatIst(iso);
+    return text === "—" ? null : text;
 }
 
 async function startQuiz(quizId) {

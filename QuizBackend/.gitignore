@@ -1,0 +1,14 @@
+# Build folders
+bin/
+obj/
+
+# IDE
+.vs/
+.vscode/
+
+# SQLite temporary files
+*.db-shm
+*.db-wal
+
+# User-specific settings
+appsettings.Development.json

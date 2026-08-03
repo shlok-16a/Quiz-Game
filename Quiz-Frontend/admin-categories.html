@@ -44,17 +44,6 @@
             <label>Wrong Points</label>
             <input id="wrongPoints" type="number" value="-5">
 
-            <label>Question Count</label>
-            <input id="questionCount" type="number" value="10">
-
-            <label>Question Timer (seconds)</label>
-            <input id="questionTimerSeconds" type="number" value="10">
-
-            <label>
-                <input id="isActive" type="checkbox" checked style="width:auto;">
-                Is Active
-            </label>
-
             <br><br>
             <div class="row">
                 <button onclick="saveCategory()">Save</button>
@@ -81,9 +70,6 @@
         document.getElementById("rulesText").value = category?.rulesText || "";
         document.getElementById("correctPoints").value = category?.correctPoints ?? 10;
         document.getElementById("wrongPoints").value = category?.wrongPoints ?? -5;
-        document.getElementById("questionCount").value = category?.questionCount ?? 10;
-        document.getElementById("questionTimerSeconds").value = category?.questionTimerSeconds ?? 10;
-        document.getElementById("isActive").checked = category?.isActive ?? true;
     }
 
     function getFormData() {
@@ -94,9 +80,9 @@
             rulesText: document.getElementById("rulesText").value.trim(),
             correctPoints: Number(document.getElementById("correctPoints").value),
             wrongPoints: Number(document.getElementById("wrongPoints").value),
-            questionCount: Number(document.getElementById("questionCount").value),
-            questionTimerSeconds: Number(document.getElementById("questionTimerSeconds").value),
-            isActive: document.getElementById("isActive").checked
+            questionCount: 10,
+            questionTimerSeconds: 10,
+            isActive: true
         };
     }
 

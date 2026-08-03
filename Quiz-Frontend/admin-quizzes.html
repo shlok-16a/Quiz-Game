@@ -33,12 +33,20 @@
             <label>Total Questions (target)</label>
             <input id="questionCount" type="number" value="10" min="1">
 
-            <label>Quiz Duration (minutes)</label>
-            <input id="durationMinutes" type="number" value="10" min="1">
+            <label>Seconds per question</label>
+            <input id="questionTimerSeconds" type="number" value="10" min="1">
+            <p class="muted">Each question in this quiz gets this many seconds.</p>
+
+            <label>Active From (IST)</label>
+            <input id="startDate" type="datetime-local">
+
+            <label>Active Until (IST)</label>
+            <input id="endDate" type="datetime-local">
+            <p class="muted">Enter times in IST. Players only see this quiz between these times.</p>
 
             <label>
                 <input id="isActive" type="checkbox" style="width:auto;">
-                Active (visible to players)
+                Active (visible to players during schedule)
             </label>
 
             <br><br>
@@ -64,10 +72,9 @@
         document.getElementById("createCard").style.display = "none";
     }
 
-    function formatDuration(seconds) {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return s ? `${m}m ${s}s` : `${m} min`;
+    function formatQuestionTimer(seconds) {
+        const s = Number(seconds) || 0;
+        return `${s} sec / question`;
     }
 
     async function loadCategories() {
@@ -78,12 +85,27 @@
     }
 
     async function createQuiz() {
+        const startDate = document.getElementById("startDate").value;
+        const endDate = document.getElementById("endDate").value;
+
+        if (!startDate || !endDate) {
+            alert("Set both Active From and Active Until.");
+            return;
+        }
+
+        if (startDate >= endDate) {
+            alert("Active Until must be after Active From.");
+            return;
+        }
+
         const body = {
             title: document.getElementById("title").value.trim(),
             categoryId: Number(document.getElementById("categoryId").value),
             questionCount: Number(document.getElementById("questionCount").value),
-            durationSeconds: Number(document.getElementById("durationMinutes").value) * 60,
-            isActive: document.getElementById("isActive").checked
+            durationSeconds: Number(document.getElementById("questionTimerSeconds").value),
+            isActive: document.getElementById("isActive").checked,
+            startDate: istLocalToIso(startDate),
+            endDate: istLocalToIso(endDate)
         };
 
         if (!body.categoryId) {
@@ -119,6 +141,23 @@
         }
     }
 
+    function getQuizStatus(q) {
+        const now = Date.now();
+        const end = parseUtcDate(q.endDate);
+        const start = parseUtcDate(q.startDate);
+
+        if (end && now > end.getTime()) {
+            return "🏁 Completed";
+        }
+        if (!q.isActive) {
+            return "⏸ Inactive";
+        }
+        if (start && now < start.getTime()) {
+            return "🕒 Scheduled";
+        }
+        return "✅ Active";
+    }
+
     async function loadQuizzes() {
         const quizzes = await apiGet("/api/QuizBuilder");
         const list = document.getElementById("list");
@@ -128,22 +167,29 @@
             return;
         }
 
-        list.innerHTML = quizzes.map(q => `
+        list.innerHTML = quizzes.map(q => {
+            const status = getQuizStatus(q);
+            const isCompleted = status.includes("Completed");
+            return `
             <div class="card">
                 <h3>${q.title}</h3>
                 <p>Category: <strong>${q.categoryName}</strong></p>
                 <p>Questions: ${q.assignedQuestions} / ${q.questionCount}</p>
-                <p>Duration: ${formatDuration(q.durationSeconds)}</p>
-                <p>Status: ${q.isActive ? "✅ Active" : "⏸ Inactive"}</p>
+                <p>Timer: ${formatQuestionTimer(q.durationSeconds)}</p>
+                <p>Active From: ${formatIst(q.startDate)}</p>
+                <p>Active Until: ${formatIst(q.endDate)}</p>
+                <p>Status: ${status}</p>
                 <div class="row">
                     <button type="button" onclick="location.href='admin-quiz-edit.html?id=${q.id}'">Edit Questions</button>
+                    ${isCompleted ? "" : `
                     <button type="button" class="secondary" onclick="toggleActive(${q.id}, ${q.isActive})">
                         ${q.isActive ? "Deactivate" : "Activate"}
-                    </button>
+                    </button>`}
                     <button type="button" class="danger" onclick="deleteQuiz(${q.id}, '${String(q.title).replace(/'/g, "\\'")}')">Delete</button>
                 </div>
             </div>
-        `).join("");
+        `;
+        }).join("");
     }
 
     (async () => {

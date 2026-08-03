@@ -35,32 +35,16 @@
 
         const sessionId = quiz.sessionId;
         const totalQuestions = quiz.totalQuestions || 0;
+        const questionTimerSeconds = Math.max(1, Number(quiz.durationSeconds) || 10);
         let questionNumber = Number(localStorage.getItem("quizQuestionNumber") || "1");
         let currentQuestion = quiz.currentQuestion || quiz.firstQuestion;
         let busy = false;
-        let remainingSeconds = quiz.durationSeconds || 0;
+        let remainingSeconds = questionTimerSeconds;
+        let timerId = null;
 
         document.getElementById("title").innerText = quiz.title || "Quiz";
 
-        if (remainingSeconds > 0) {
-            const timerEl = document.getElementById("timer");
-            const tick = () => {
-                const m = Math.floor(remainingSeconds / 60);
-                const s = remainingSeconds % 60;
-                timerEl.innerText = `Time left: ${m}:${String(s).padStart(2, "0")}`;
-                if (remainingSeconds <= 0) {
-                    clearInterval(timerId);
-                    alert("Time is up!");
-                    localStorage.setItem("resultSession", sessionId);
-                    window.location.href = "result.html";
-                    return;
-                }
-                remainingSeconds -= 1;
-            };
-            tick();
-            var timerId = setInterval(tick, 1000);
-        }
-
+        const timerEl = document.getElementById("timer");
         const questionEl = document.getElementById("question");
         const option1El = document.getElementById("option1");
         const option2El = document.getElementById("option2");
@@ -74,6 +58,32 @@
             option2El.disabled = disabled;
             option3El.disabled = disabled;
             skipEl.disabled = disabled;
+        }
+
+        function stopQuestionTimer() {
+            if (timerId) {
+                clearInterval(timerId);
+                timerId = null;
+            }
+        }
+
+        function updateTimerLabel() {
+            timerEl.innerText = `Time left: ${remainingSeconds}s`;
+        }
+
+        function startQuestionTimer() {
+            stopQuestionTimer();
+            remainingSeconds = questionTimerSeconds;
+            updateTimerLabel();
+            timerId = setInterval(() => {
+                remainingSeconds -= 1;
+                updateTimerLabel();
+                if (remainingSeconds <= 0) {
+                    stopQuestionTimer();
+                    statusEl.innerText = "Time up — skipping...";
+                    submitAnswer(0);
+                }
+            }, 1000);
         }
 
         function render(question) {
@@ -99,11 +109,13 @@
             localStorage.setItem("quizQuestionNumber", String(questionNumber));
 
             setButtonsDisabled(false);
+            startQuestionTimer();
         }
 
         async function submitAnswer(selectedOption) {
             if (busy) return;
             busy = true;
+            stopQuestionTimer();
             setButtonsDisabled(true);
             statusEl.innerText = selectedOption === 0 ? "Skipping..." : "Submitting...";
 
@@ -129,6 +141,7 @@
                     statusEl.innerText = "Error submitting answer";
                     busy = false;
                     setButtonsDisabled(false);
+                    startQuestionTimer();
                     return;
                 }
 
@@ -147,12 +160,13 @@
 
                 questionNumber += 1;
                 statusEl.innerText = "Loaded next question";
+                busy = false;
                 render(data.nextQuestion);
             } catch (err) {
                 console.error(err);
                 statusEl.innerText = "Network error";
                 setButtonsDisabled(false);
-            } finally {
+                startQuestionTimer();
                 busy = false;
             }
         }

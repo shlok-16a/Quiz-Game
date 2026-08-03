@@ -32,11 +32,9 @@ async function loadResult() {
         `Percentage : ${data.percentage}%`;
 }
 
-function playAgain() {
-
+function goBack() {
     localStorage.removeItem("quiz");
+    localStorage.removeItem("quizQuestionNumber");
     localStorage.removeItem("resultSession");
-
     window.location.href = "categories.html";
-
-}   
+}

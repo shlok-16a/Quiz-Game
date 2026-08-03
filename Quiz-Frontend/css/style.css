@@ -104,6 +104,33 @@ input, select, textarea {
     background: white;
 }
 
+input[type="checkbox"] {
+    width: auto;
+    max-width: none;
+    padding: 0;
+    accent-color: #2563eb;
+}
+
+.bulk-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.bulk-bar .muted {
+    margin: 0;
+}
+
+th.col-check,
+td.col-check {
+    width: 36px;
+    text-align: center;
+    vertical-align: middle;
+}
+
 textarea { min-height: 80px; resize: vertical; }
 
 button {

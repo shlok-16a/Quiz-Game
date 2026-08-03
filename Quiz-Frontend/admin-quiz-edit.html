@@ -29,12 +29,20 @@
             <label>Total Questions (target)</label>
             <input id="questionCount" type="number" min="1">
 
-            <label>Duration (minutes)</label>
-            <input id="durationMinutes" type="number" min="1">
+            <label>Seconds per question</label>
+            <input id="questionTimerSeconds" type="number" min="1">
+            <p class="muted">Each question in this quiz gets this many seconds.</p>
+
+            <label>Active From (IST)</label>
+            <input id="startDate" type="datetime-local">
+
+            <label>Active Until (IST)</label>
+            <input id="endDate" type="datetime-local">
+            <p class="muted">Enter times in IST. Players only see this quiz between these times.</p>
 
             <label>
                 <input id="isActive" type="checkbox" style="width:auto;">
-                Active (players can see & play)
+                Active (players can see & play during schedule)
             </label>
 
             <br><br>
@@ -45,7 +53,44 @@
             <h3>Add Questions</h3>
             <div class="row">
                 <button type="button" onclick="addRandom()">Select Random from Category</button>
+                <button type="button" class="secondary" onclick="toggleManualAdd()">Manually Add</button>
             </div>
+
+            <div id="manualAddCard" style="display:none; margin-top:16px;">
+                <h4>New Question</h4>
+                <label>Question Text</label>
+                <textarea id="manualQuestionText" rows="3"></textarea>
+
+                <label>Option 1</label>
+                <input id="manualOption1">
+
+                <label>Option 2</label>
+                <input id="manualOption2">
+
+                <label>Option 3</label>
+                <input id="manualOption3">
+
+                <label>Correct Option</label>
+                <select id="manualCorrectOption">
+                    <option value="1">Option 1</option>
+                    <option value="2">Option 2</option>
+                    <option value="3">Option 3</option>
+                </select>
+
+                <label>Difficulty</label>
+                <select id="manualDifficulty">
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                </select>
+
+                <br><br>
+                <div class="row">
+                    <button type="button" onclick="saveManualQuestion()">Save</button>
+                    <button type="button" class="secondary" onclick="toggleManualAdd(false)">Cancel</button>
+                </div>
+            </div>
+
             <br>
             <label>Or pick manually from category pool</label>
             <select id="poolSelect" multiple size="8" style="max-width:100%; height:160px;"></select>
@@ -90,16 +135,33 @@
 
         document.getElementById("title").value = quiz.title;
         document.getElementById("questionCount").value = quiz.questionCount;
-        document.getElementById("durationMinutes").value = Math.max(1, Math.round(quiz.durationSeconds / 60));
+        document.getElementById("questionTimerSeconds").value = Math.max(1, Number(quiz.durationSeconds) || 10);
         document.getElementById("isActive").checked = quiz.isActive;
+        document.getElementById("startDate").value = isoToIstLocal(quiz.startDate);
+        document.getElementById("endDate").value = isoToIstLocal(quiz.endDate);
     }
 
     async function saveSettings() {
+        const startDate = document.getElementById("startDate").value;
+        const endDate = document.getElementById("endDate").value;
+
+        if (!startDate || !endDate) {
+            alert("Set both Active From and Active Until.");
+            return;
+        }
+
+        if (startDate >= endDate) {
+            alert("Active Until must be after Active From.");
+            return;
+        }
+
         const body = {
             title: document.getElementById("title").value.trim(),
             questionCount: Number(document.getElementById("questionCount").value),
-            durationSeconds: Number(document.getElementById("durationMinutes").value) * 60,
-            isActive: document.getElementById("isActive").checked
+            durationSeconds: Number(document.getElementById("questionTimerSeconds").value),
+            isActive: document.getElementById("isActive").checked,
+            startDate: istLocalToIso(startDate),
+            endDate: istLocalToIso(endDate)
         };
 
         try {
@@ -170,6 +232,53 @@
 
         try {
             await apiSend(`/api/QuizBuilder/${quizId}/questions`, "POST", { questionIds });
+            await refreshAll();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    function toggleManualAdd(force) {
+        const card = document.getElementById("manualAddCard");
+        const show = typeof force === "boolean" ? force : card.style.display === "none";
+        card.style.display = show ? "block" : "none";
+        if (show) {
+            document.getElementById("manualQuestionText").focus();
+        }
+    }
+
+    function clearManualForm() {
+        document.getElementById("manualQuestionText").value = "";
+        document.getElementById("manualOption1").value = "";
+        document.getElementById("manualOption2").value = "";
+        document.getElementById("manualOption3").value = "";
+        document.getElementById("manualCorrectOption").value = "1";
+        document.getElementById("manualDifficulty").value = "Easy";
+    }
+
+    async function saveManualQuestion() {
+        const body = {
+            questionText: document.getElementById("manualQuestionText").value.trim(),
+            option1: document.getElementById("manualOption1").value.trim(),
+            option2: document.getElementById("manualOption2").value.trim(),
+            option3: document.getElementById("manualOption3").value.trim(),
+            correctOption: Number(document.getElementById("manualCorrectOption").value),
+            difficulty: document.getElementById("manualDifficulty").value,
+            categoryId: quiz.categoryId
+        };
+
+        if (!body.questionText || !body.option1 || !body.option2 || !body.option3) {
+            alert("Fill question text and all 3 options.");
+            return;
+        }
+
+        try {
+            const created = await apiSend("/api/Question", "POST", body);
+            await apiSend(`/api/QuizBuilder/${quizId}/questions`, "POST", {
+                questionIds: [created.id]
+            });
+            clearManualForm();
+            toggleManualAdd(false);
             await refreshAll();
         } catch (err) {
             alert(err.message);
