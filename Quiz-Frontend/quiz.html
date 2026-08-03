@@ -33,9 +33,18 @@
             window.location.href = "categories.html";
         }
 
-        const sessionId = quiz.sessionId;
-        const totalQuestions = quiz.totalQuestions || 0;
-        const questionTimerSeconds = Math.max(1, Number(quiz.durationSeconds) || 10);
+        const sessionId = quiz.sessionId ?? quiz.SessionId;
+        const totalQuestions = quiz.totalQuestions ?? quiz.TotalQuestions ?? 0;
+        // Admin "Seconds per question" from quiz start API
+        const questionTimerSeconds = Math.max(
+            1,
+            Number(
+                quiz.questionTimerSeconds ??
+                quiz.QuestionTimerSeconds ??
+                quiz.durationSeconds ??
+                quiz.DurationSeconds
+            ) || 10
+        );
         let questionNumber = Number(localStorage.getItem("quizQuestionNumber") || "1");
         let currentQuestion = quiz.currentQuestion || quiz.firstQuestion;
         let busy = false;
@@ -53,11 +62,38 @@
         const progressEl = document.getElementById("progress");
         const statusEl = document.getElementById("status");
 
+        const optionButtons = [option1El, option2El, option3El];
+
         function setButtonsDisabled(disabled) {
-            option1El.disabled = disabled;
-            option2El.disabled = disabled;
-            option3El.disabled = disabled;
+            optionButtons.forEach(btn => { btn.disabled = disabled; });
             skipEl.disabled = disabled;
+        }
+
+        function clearOptionStyles() {
+            optionButtons.forEach(btn => {
+                btn.classList.remove("option-correct", "option-wrong");
+            });
+        }
+
+        function showAnswerFeedback(selectedOption, isCorrect) {
+            if (selectedOption < 1 || selectedOption > 3) return;
+            const btn = optionButtons[selectedOption - 1];
+            btn.classList.add(isCorrect ? "option-correct" : "option-wrong");
+            statusEl.style.color = isCorrect ? "#16a34a" : "#dc2626";
+            statusEl.innerText = isCorrect ? "Correct!" : "Incorrect";
+        }
+
+        function showCorrectAnswer(correctOption) {
+            const option = Number(correctOption);
+            if (option < 1 || option > 3) return;
+            clearOptionStyles();
+            optionButtons[option - 1].classList.add("option-correct");
+            statusEl.style.color = "#16a34a";
+            statusEl.innerText = "Time up — correct answer highlighted";
+        }
+
+        function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
         }
 
         function stopQuestionTimer() {
@@ -95,11 +131,13 @@
                 option3: question.option3 ?? question.Option3
             };
 
+            clearOptionStyles();
             questionEl.innerText = currentQuestion.questionText;
             option1El.innerText = currentQuestion.option1;
             option2El.innerText = currentQuestion.option2;
             option3El.innerText = currentQuestion.option3;
             progressEl.innerText = `Question ${questionNumber}` + (totalQuestions ? ` of ${totalQuestions}` : "");
+            statusEl.style.color = "";
             statusEl.innerText = "";
 
             // Persist so a page refresh keeps the current question
@@ -117,6 +155,7 @@
             busy = true;
             stopQuestionTimer();
             setButtonsDisabled(true);
+            statusEl.style.color = "";
             statusEl.innerText = selectedOption === 0 ? "Skipping..." : "Submitting...";
 
             try {
@@ -145,23 +184,39 @@
                     return;
                 }
 
-                if (data.quizCompleted) {
+                const isCorrect = data.isCorrect ?? data.IsCorrect;
+                const correctOption = data.correctOption ?? data.CorrectOption;
+
+                if (selectedOption > 0) {
+                    showAnswerFeedback(selectedOption, !!isCorrect);
+                    // If wrong, also show the correct option in green
+                    if (!isCorrect && correctOption >= 1 && correctOption <= 3) {
+                        optionButtons[correctOption - 1].classList.add("option-correct");
+                    }
+                    await wait(900);
+                } else {
+                    // Timed out / skipped — reveal correct answer before moving on
+                    showCorrectAnswer(correctOption);
+                    await wait(1200);
+                }
+
+                if (data.quizCompleted ?? data.QuizCompleted) {
                     localStorage.setItem("resultSession", sessionId);
                     localStorage.removeItem("quizQuestionNumber");
                     window.location.href = "result.html";
                     return;
                 }
 
-                if (!data.nextQuestion) {
+                const nextQuestion = data.nextQuestion ?? data.NextQuestion;
+                if (!nextQuestion) {
                     statusEl.innerText = "No next question in response";
                     busy = false;
                     return;
                 }
 
                 questionNumber += 1;
-                statusEl.innerText = "Loaded next question";
                 busy = false;
-                render(data.nextQuestion);
+                render(nextQuestion);
             } catch (err) {
                 console.error(err);
                 statusEl.innerText = "Network error";

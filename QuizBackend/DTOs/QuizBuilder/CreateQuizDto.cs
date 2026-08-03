@@ -6,6 +6,8 @@ public class CreateQuizDto
 
     public int CategoryId { get; set; }
 
+    public string RulesText { get; set; } = string.Empty;
+
     public int QuestionCount { get; set; } = 10;
 
     /// <summary>Seconds allotted to each question.</summary>

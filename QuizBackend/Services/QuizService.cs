@@ -121,11 +121,14 @@ public class QuizService
 
         var firstQuestion = selectedQuestions.First();
 
+        var secondsPerQuestion = quiz.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
+
         return new StartQuizResponseDto
         {
             SessionId = session.Id,
             TotalQuestions = selectedQuestions.Count,
-            DurationSeconds = quiz.DurationSeconds,
+            QuestionTimerSeconds = secondsPerQuestion,
+            DurationSeconds = secondsPerQuestion,
             Title = quiz.Title,
             FirstQuestion = new PlayQuestionDto
             {
@@ -218,6 +221,7 @@ public class QuizService
                 IsCorrect = isCorrect,
                 Score = session.Score,
                 QuizCompleted = true,
+                CorrectOption = question.CorrectOption,
                 NextQuestion = null
             };
         }
@@ -233,6 +237,7 @@ public class QuizService
             IsCorrect = isCorrect,
             Score = session.Score,
             QuizCompleted = false,
+            CorrectOption = question.CorrectOption,
             NextQuestion = new PlayQuestionDto
             {
                 Id = nextQuestion.Id,

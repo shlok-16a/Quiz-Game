@@ -10,6 +10,9 @@ public class Quiz
 
     public QuizCategory Category { get; set; } = null!;
 
+    /// <summary>Rules shown to players for this quiz.</summary>
+    public string RulesText { get; set; } = string.Empty;
+
     /// <summary>Target number of questions for this quiz.</summary>
     public int QuestionCount { get; set; } = 10;
 

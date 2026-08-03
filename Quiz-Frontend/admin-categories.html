@@ -35,9 +35,6 @@
             <label>Cover Image URL</label>
             <input id="coverImageUrl">
 
-            <label>Rules</label>
-            <textarea id="rulesText"></textarea>
-
             <label>Correct Points</label>
             <input id="correctPoints" type="number" value="10">
 
@@ -67,7 +64,6 @@
         document.getElementById("name").value = category?.name || "";
         document.getElementById("description").value = category?.description || "";
         document.getElementById("coverImageUrl").value = category?.coverImageUrl || "";
-        document.getElementById("rulesText").value = category?.rulesText || "";
         document.getElementById("correctPoints").value = category?.correctPoints ?? 10;
         document.getElementById("wrongPoints").value = category?.wrongPoints ?? -5;
     }
@@ -77,7 +73,7 @@
             name: document.getElementById("name").value.trim(),
             description: document.getElementById("description").value.trim(),
             coverImageUrl: document.getElementById("coverImageUrl").value.trim(),
-            rulesText: document.getElementById("rulesText").value.trim(),
+            rulesText: "",
             correctPoints: Number(document.getElementById("correctPoints").value),
             wrongPoints: Number(document.getElementById("wrongPoints").value),
             questionCount: 10,

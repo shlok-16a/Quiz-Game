@@ -10,11 +10,20 @@ public class QuizResponseDto
 
     public string CategoryName { get; set; } = string.Empty;
 
+    public string RulesText { get; set; } = string.Empty;
+
+    public int CorrectPoints { get; set; }
+
+    public int WrongPoints { get; set; }
+
     public int QuestionCount { get; set; }
 
     public int AssignedQuestions { get; set; }
 
+    /// <summary>Seconds allotted to each question.</summary>
     public int DurationSeconds { get; set; }
+
+    public int QuestionTimerSeconds { get; set; }
 
     public bool IsActive { get; set; }
 

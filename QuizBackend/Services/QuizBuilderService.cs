@@ -85,6 +85,7 @@ public class QuizBuilderService
         {
             Title = string.IsNullOrWhiteSpace(dto.Title) ? $"{category.Name} Quiz" : dto.Title.Trim(),
             CategoryId = dto.CategoryId,
+            RulesText = dto.RulesText?.Trim() ?? string.Empty,
             QuestionCount = dto.QuestionCount <= 0 ? 10 : dto.QuestionCount,
             DurationSeconds = dto.DurationSeconds <= 0 ? 10 : dto.DurationSeconds,
             IsActive = dto.IsActive,
@@ -106,6 +107,7 @@ public class QuizBuilderService
         ValidateSchedule(dto.StartDate, dto.EndDate);
 
         quiz.Title = dto.Title.Trim();
+        quiz.RulesText = dto.RulesText?.Trim() ?? string.Empty;
         quiz.QuestionCount = dto.QuestionCount;
         quiz.DurationSeconds = dto.DurationSeconds;
         quiz.IsActive = dto.IsActive;
@@ -369,9 +371,13 @@ public class QuizBuilderService
         Title = q.Title,
         CategoryId = q.CategoryId,
         CategoryName = q.Category.Name,
+        RulesText = q.RulesText,
+        CorrectPoints = q.Category.CorrectPoints,
+        WrongPoints = q.Category.WrongPoints,
         QuestionCount = q.QuestionCount,
         AssignedQuestions = q.QuizQuestions.Count,
         DurationSeconds = q.DurationSeconds,
+        QuestionTimerSeconds = q.DurationSeconds,
         IsActive = q.IsActive,
         StartDate = AsUtc(q.StartDate),
         EndDate = AsUtc(q.EndDate),

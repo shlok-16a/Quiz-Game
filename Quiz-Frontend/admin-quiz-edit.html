@@ -26,6 +26,9 @@
             <label>Title</label>
             <input id="title">
 
+            <label>Rules</label>
+            <textarea id="rulesText" rows="4" placeholder="Quiz rules for players..."></textarea>
+
             <label>Total Questions (target)</label>
             <input id="questionCount" type="number" min="1">
 
@@ -134,6 +137,7 @@
             `Category: ${quiz.categoryName} · Assigned ${quiz.assignedQuestions}/${quiz.questionCount}`;
 
         document.getElementById("title").value = quiz.title;
+        document.getElementById("rulesText").value = quiz.rulesText || "";
         document.getElementById("questionCount").value = quiz.questionCount;
         document.getElementById("questionTimerSeconds").value = Math.max(1, Number(quiz.durationSeconds) || 10);
         document.getElementById("isActive").checked = quiz.isActive;
@@ -157,6 +161,7 @@
 
         const body = {
             title: document.getElementById("title").value.trim(),
+            rulesText: document.getElementById("rulesText").value.trim(),
             questionCount: Number(document.getElementById("questionCount").value),
             durationSeconds: Number(document.getElementById("questionTimerSeconds").value),
             isActive: document.getElementById("isActive").checked,

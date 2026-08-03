@@ -30,6 +30,16 @@
             <label>Category</label>
             <select id="categoryId"></select>
 
+            <label>Correct Points</label>
+            <input id="correctPoints" type="number" readonly>
+
+            <label>Wrong Points</label>
+            <input id="wrongPoints" type="number" readonly>
+            <p class="muted">Scoring comes from the selected category.</p>
+
+            <label>Rules</label>
+            <textarea id="rulesText" rows="4" placeholder="e.g. No cheating, answer within time, one attempt only..."></textarea>
+
             <label>Total Questions (target)</label>
             <input id="questionCount" type="number" value="10" min="1">
 
@@ -64,8 +74,11 @@
 <script>
     requireAdmin();
 
+    let categoriesCache = [];
+
     function showCreate() {
         document.getElementById("createCard").style.display = "block";
+        updateCategoryPoints();
     }
 
     function hideCreate() {
@@ -77,11 +90,27 @@
         return `${s} sec / question`;
     }
 
+    function updateCategoryPoints() {
+        const id = Number(document.getElementById("categoryId").value);
+        const category = categoriesCache.find(c => c.id === id);
+        document.getElementById("correctPoints").value = category?.correctPoints ?? "";
+        document.getElementById("wrongPoints").value = category?.wrongPoints ?? "";
+    }
+
     async function loadCategories() {
-        const categories = await apiGet("/api/Category");
+        categoriesCache = await apiGet("/api/Category");
         document.getElementById("categoryId").innerHTML =
-            categories.map(c => `<option value="${c.id}">${c.name}</option>`).join("")
+            categoriesCache.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("")
             || `<option value="">No categories</option>`;
+        updateCategoryPoints();
+    }
+
+    function escapeHtml(text) {
+        return String(text ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
     }
 
     async function createQuiz() {
@@ -101,6 +130,7 @@
         const body = {
             title: document.getElementById("title").value.trim(),
             categoryId: Number(document.getElementById("categoryId").value),
+            rulesText: document.getElementById("rulesText").value.trim(),
             questionCount: Number(document.getElementById("questionCount").value),
             durationSeconds: Number(document.getElementById("questionTimerSeconds").value),
             isActive: document.getElementById("isActive").checked,
@@ -194,6 +224,7 @@
 
     (async () => {
         await loadCategories();
+        document.getElementById("categoryId").onchange = updateCategoryPoints;
         await loadQuizzes();
     })().catch(err => alert(err.message));
 </script>
