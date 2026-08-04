@@ -23,20 +23,33 @@ public class AuthService
 
     public async Task<RegisterResponseDto> RegisterAsync(RegisterRequestDto dto)
     {
+        var fullName = dto.FullName?.Trim() ?? string.Empty;
+        var email = dto.Email?.Trim() ?? string.Empty;
+        var password = dto.Password ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(fullName))
+            throw new Exception("Full name is required.");
+
+        if (string.IsNullOrWhiteSpace(email))
+            throw new Exception("Email is required.");
+
+        if (password.Length < 4)
+            throw new Exception("Password must be at least 4 characters.");
+
         var existingUser = await _context.Users
-            .FirstOrDefaultAsync(x => x.Email == dto.Email);
+            .FirstOrDefaultAsync(x => x.Email == email);
 
         if (existingUser != null)
         {
             throw new Exception("Email already exists.");
         }
 
-        var passwordHash = HashPassword(dto.Password);
+        var passwordHash = HashPassword(password);
 
         var user = new User
         {
-            FullName = dto.FullName,
-            Email = dto.Email,
+            FullName = fullName,
+            Email = email,
             PasswordHash = passwordHash
         };
 

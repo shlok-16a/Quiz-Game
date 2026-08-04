@@ -35,8 +35,8 @@
 
         const sessionId = quiz.sessionId ?? quiz.SessionId;
         const totalQuestions = quiz.totalQuestions ?? quiz.TotalQuestions ?? 0;
-        // Admin "Seconds per question" from quiz start API
-        const questionTimerSeconds = Math.max(
+        // Fallback from quiz start API; each question may override via timerSeconds.
+        const defaultQuestionTimerSeconds = Math.max(
             1,
             Number(
                 quiz.questionTimerSeconds ??
@@ -48,8 +48,15 @@
         let questionNumber = Number(localStorage.getItem("quizQuestionNumber") || "1");
         let currentQuestion = quiz.currentQuestion || quiz.firstQuestion;
         let busy = false;
+        let questionTimerSeconds = defaultQuestionTimerSeconds;
         let remainingSeconds = questionTimerSeconds;
         let timerId = null;
+
+        function resolveQuestionTimer(question) {
+            const fromQuestion = Number(question?.timerSeconds ?? question?.TimerSeconds);
+            if (fromQuestion > 0) return fromQuestion;
+            return defaultQuestionTimerSeconds;
+        }
 
         document.getElementById("title").innerText = quiz.title || "Quiz";
 
@@ -75,12 +82,16 @@
             });
         }
 
-        function showAnswerFeedback(selectedOption, isCorrect) {
+        function showAnswerFeedback(selectedOption, isCorrect, bonusAwarded) {
             if (selectedOption < 1 || selectedOption > 3) return;
             const btn = optionButtons[selectedOption - 1];
             btn.classList.add(isCorrect ? "option-correct" : "option-wrong");
             statusEl.style.color = isCorrect ? "#16a34a" : "#dc2626";
-            statusEl.innerText = isCorrect ? "Correct!" : "Incorrect";
+            if (isCorrect && bonusAwarded > 0) {
+                statusEl.innerText = `Correct! +${bonusAwarded} bonus`;
+            } else {
+                statusEl.innerText = isCorrect ? "Correct!" : "Incorrect";
+            }
         }
 
         function showCorrectAnswer(correctOption) {
@@ -123,12 +134,14 @@
         }
 
         function render(question) {
+            questionTimerSeconds = resolveQuestionTimer(question);
             currentQuestion = {
                 id: question.id ?? question.Id,
                 questionText: question.questionText ?? question.QuestionText,
                 option1: question.option1 ?? question.Option1,
                 option2: question.option2 ?? question.Option2,
-                option3: question.option3 ?? question.Option3
+                option3: question.option3 ?? question.Option3,
+                timerSeconds: questionTimerSeconds
             };
 
             clearOptionStyles();
@@ -143,6 +156,7 @@
             // Persist so a page refresh keeps the current question
             const saved = JSON.parse(localStorage.getItem("quiz"));
             saved.currentQuestion = currentQuestion;
+            saved.questionTimerSeconds = questionTimerSeconds;
             localStorage.setItem("quiz", JSON.stringify(saved));
             localStorage.setItem("quizQuestionNumber", String(questionNumber));
 
@@ -169,7 +183,8 @@
                     body: JSON.stringify({
                         sessionId: sessionId,
                         questionId: currentQuestion.id,
-                        selectedOption: selectedOption
+                        selectedOption: selectedOption,
+                        timeTakenSeconds: Math.max(0, questionTimerSeconds - remainingSeconds)
                     })
                 });
 
@@ -184,16 +199,18 @@
                     return;
                 }
 
-                const isCorrect = data.isCorrect ?? data.IsCorrect;
-                const correctOption = data.correctOption ?? data.CorrectOption;
+                const isCorrect = !!(data.isCorrect ?? data.IsCorrect);
+                const correctOption = Number(data.correctOption ?? data.CorrectOption ?? 0);
+                const bonusAwarded = Number(data.bonusAwarded ?? data.BonusAwarded ?? 0);
 
                 if (selectedOption > 0) {
-                    showAnswerFeedback(selectedOption, !!isCorrect);
-                    // If wrong, also show the correct option in green
+                    showAnswerFeedback(selectedOption, isCorrect, bonusAwarded);
+                    // Wrong answer: keep selected red, also show correct option in green
                     if (!isCorrect && correctOption >= 1 && correctOption <= 3) {
                         optionButtons[correctOption - 1].classList.add("option-correct");
+                        statusEl.innerText = "Incorrect — correct answer highlighted";
                     }
-                    await wait(900);
+                    await wait(isCorrect ? 900 : 1400);
                 } else {
                     // Timed out / skipped — reveal correct answer before moving on
                     showCorrectAnswer(correctOption);

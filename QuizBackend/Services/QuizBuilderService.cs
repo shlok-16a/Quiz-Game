@@ -88,6 +88,9 @@ public class QuizBuilderService
             RulesText = dto.RulesText?.Trim() ?? string.Empty,
             QuestionCount = dto.QuestionCount <= 0 ? 10 : dto.QuestionCount,
             DurationSeconds = dto.DurationSeconds <= 0 ? 10 : dto.DurationSeconds,
+            UsePerQuestionTimer = dto.UsePerQuestionTimer,
+            BonusTimePercent = ClampBonusPercent(dto.BonusTimePercent),
+            BonusPoints = Math.Max(0, dto.BonusPoints),
             IsActive = dto.IsActive,
             StartDate = ToUtc(dto.StartDate),
             EndDate = ToUtc(dto.EndDate)
@@ -109,7 +112,10 @@ public class QuizBuilderService
         quiz.Title = dto.Title.Trim();
         quiz.RulesText = dto.RulesText?.Trim() ?? string.Empty;
         quiz.QuestionCount = dto.QuestionCount;
-        quiz.DurationSeconds = dto.DurationSeconds;
+        quiz.DurationSeconds = dto.DurationSeconds <= 0 ? 10 : dto.DurationSeconds;
+        quiz.UsePerQuestionTimer = dto.UsePerQuestionTimer;
+        quiz.BonusTimePercent = ClampBonusPercent(dto.BonusTimePercent);
+        quiz.BonusPoints = Math.Max(0, dto.BonusPoints);
         quiz.IsActive = dto.IsActive;
         quiz.StartDate = ToUtc(dto.StartDate);
         quiz.EndDate = ToUtc(dto.EndDate);
@@ -165,9 +171,32 @@ public class QuizBuilderService
                 CorrectOption = qq.Question.CorrectOption,
                 Difficulty = qq.Question.Difficulty,
                 CategoryId = qq.Question.CategoryId,
-                CategoryName = qq.Question.Category.Name
+                CategoryName = qq.Question.Category.Name,
+                TimerSeconds = qq.TimerSeconds > 0
+                    ? qq.TimerSeconds
+                    : qq.Quiz.DurationSeconds
             })
             .ToListAsync();
+    }
+
+    public async Task UpdateQuestionTimerAsync(int quizId, int questionId, int timerSeconds)
+    {
+        if (timerSeconds < 1)
+            throw new Exception("Timer must be at least 1 second.");
+
+        var quiz = await _context.Quizzes
+            .Include(q => q.QuizQuestions)
+            .FirstOrDefaultAsync(q => q.Id == quizId)
+            ?? throw new Exception("Quiz not found.");
+
+        var link = quiz.QuizQuestions
+            .FirstOrDefault(q => q.QuestionId == questionId)
+            ?? throw new Exception("Question not found in this quiz.");
+
+        link.TimerSeconds = timerSeconds;
+        // Saving a per-question timer implies this quiz uses per-question mode.
+        quiz.UsePerQuestionTimer = true;
+        await _context.SaveChangesAsync();
     }
 
     public async Task AddQuestionsAsync(int quizId, List<int> questionIds)
@@ -181,6 +210,7 @@ public class QuizBuilderService
         var nextOrder = quiz.QuizQuestions.Any()
             ? quiz.QuizQuestions.Max(q => q.QuestionOrder) + 1
             : 1;
+        var defaultTimer = quiz.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
 
         var validQuestions = await _context.Questions
             .Where(q => questionIds.Contains(q.Id) && q.CategoryId == quiz.CategoryId && q.IsActive)
@@ -195,7 +225,8 @@ public class QuizBuilderService
             {
                 QuizId = quizId,
                 QuestionId = question.Id,
-                QuestionOrder = nextOrder++
+                QuestionOrder = nextOrder++,
+                TimerSeconds = defaultTimer
             });
         }
 
@@ -248,6 +279,7 @@ public class QuizBuilderService
         var nextOrder = quiz.QuizQuestions.Any()
             ? quiz.QuizQuestions.Max(q => q.QuestionOrder) + 1
             : 1;
+        var defaultTimer = quiz.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
 
         foreach (var question in selected)
         {
@@ -255,7 +287,8 @@ public class QuizBuilderService
             {
                 QuizId = quizId,
                 QuestionId = question.Id,
-                QuestionOrder = nextOrder++
+                QuestionOrder = nextOrder++,
+                TimerSeconds = defaultTimer
             });
         }
 
@@ -271,6 +304,7 @@ public class QuizBuilderService
 
         var result = new ImportQuestionsResultDto();
         var newQuestions = new List<Question>();
+        var defaultTimer = quiz.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
 
         using var reader = new StreamReader(csvStream, Encoding.UTF8);
         using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
@@ -339,7 +373,8 @@ public class QuizBuilderService
             {
                 QuizId = quizId,
                 QuestionId = question.Id,
-                QuestionOrder = nextOrder++
+                QuestionOrder = nextOrder++,
+                TimerSeconds = defaultTimer
             });
         }
 
@@ -353,6 +388,9 @@ public class QuizBuilderService
         if (startDate.HasValue && endDate.HasValue && endDate <= startDate)
             throw new Exception("Active end time must be after the start time.");
     }
+
+    private static int ClampBonusPercent(int percent)
+        => Math.Clamp(percent, 0, 100);
 
     private static DateTime? ToUtc(DateTime? value)
     {
@@ -378,6 +416,9 @@ public class QuizBuilderService
         AssignedQuestions = q.QuizQuestions.Count,
         DurationSeconds = q.DurationSeconds,
         QuestionTimerSeconds = q.DurationSeconds,
+        UsePerQuestionTimer = q.UsePerQuestionTimer,
+        BonusTimePercent = q.BonusTimePercent,
+        BonusPoints = q.BonusPoints,
         IsActive = q.IsActive,
         StartDate = AsUtc(q.StartDate),
         EndDate = AsUtc(q.EndDate),

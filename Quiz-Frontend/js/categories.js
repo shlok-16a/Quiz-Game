@@ -102,6 +102,17 @@ function openStartModal(quizId) {
     document.getElementById("modalWrong").innerText = String(quiz.wrongPoints ?? 0);
     document.getElementById("modalTimer").innerText = String(timerSec);
 
+    const bonusPercent = Number(quiz.bonusTimePercent) || 0;
+    const bonusPoints = Number(quiz.bonusPoints) || 0;
+    const bonusRow = document.getElementById("modalBonusRow");
+    if (bonusPercent > 0 && bonusPoints > 0) {
+        document.getElementById("modalBonus").innerText =
+            `+${bonusPoints} if correct within first ${bonusPercent}% of each question’s time`;
+        bonusRow.style.display = "block";
+    } else {
+        bonusRow.style.display = "none";
+    }
+
     const rulesBlock = document.getElementById("modalRulesBlock");
     const rulesEl = document.getElementById("modalRules");
     if (rules) {

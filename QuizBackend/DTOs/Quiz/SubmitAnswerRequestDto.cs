@@ -7,4 +7,7 @@ public class SubmitAnswerRequestDto
     public int QuestionId { get; set; }
 
     public int SelectedOption { get; set; }
+
+    /// <summary>Seconds elapsed on this question before answering.</summary>
+    public int TimeTakenSeconds { get; set; }
 }

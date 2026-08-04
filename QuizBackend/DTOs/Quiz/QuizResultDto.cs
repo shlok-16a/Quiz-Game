@@ -14,6 +14,12 @@ public class QuizResultDto
 
     public int TotalQuestions { get; set; }
 
+    /// <summary>Total speed-bonus points earned across the quiz.</summary>
+    public int BonusPoints { get; set; }
+
+    /// <summary>How many answers earned the speed bonus.</summary>
+    public int BonusAnswers { get; set; }
+
     public double Percentage { get; set; }
 
     public DateTime? CompletedAt { get; set; }

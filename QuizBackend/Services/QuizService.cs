@@ -41,46 +41,20 @@ public class QuizService
         if (alreadyAttempted)
             throw new Exception("You have already attempted this quiz.");
 
+        // Use exactly the questions admin assigned to this quiz.
         var pool = quiz.QuizQuestions
-            .OrderBy(qq => qq.QuestionOrder)
-            .Select(qq => qq.Question)
-            .Where(q => q.IsActive)
+            .Where(qq => qq.Question.IsActive)
             .ToList();
 
         if (!pool.Any())
             throw new Exception("This quiz has no questions.");
 
-        var poolIds = pool.Select(q => q.Id).ToHashSet();
-
-        var seenIds = await _context.SeenQuestions
-            .Where(s =>
-                s.UserId == userId &&
-                s.CategoryId == quiz.CategoryId &&
-                poolIds.Contains(s.QuestionId))
-            .Select(s => s.QuestionId)
-            .ToListAsync();
-
-        var unseen = pool.Where(q => !seenIds.Contains(q.Id)).ToList();
-
-        // Pool exhausted for this user → reset seen for this quiz's questions, then reuse full pool
-        if (!unseen.Any())
-        {
-            var seenToClear = _context.SeenQuestions.Where(s =>
-                s.UserId == userId &&
-                s.CategoryId == quiz.CategoryId &&
-                poolIds.Contains(s.QuestionId));
-
-            _context.SeenQuestions.RemoveRange(seenToClear);
-            await _context.SaveChangesAsync();
-
-            unseen = pool;
-        }
-
         var takeCount = quiz.QuestionCount > 0
-            ? Math.Min(quiz.QuestionCount, unseen.Count)
-            : unseen.Count;
+            ? Math.Min(quiz.QuestionCount, pool.Count)
+            : pool.Count;
 
-        var selectedQuestions = unseen
+        // Shuffle question order for this user session (independent of admin order).
+        var selectedLinks = pool
             .OrderBy(_ => Guid.NewGuid())
             .Take(takeCount)
             .ToList();
@@ -99,45 +73,37 @@ public class QuizService
         _context.QuizSessions.Add(session);
         await _context.SaveChangesAsync();
 
+        var sessionQuestions = new List<QuizSessionQuestion>();
         int order = 1;
-        foreach (var question in selectedQuestions)
+        foreach (var link in selectedLinks)
         {
-            _context.QuizSessionQuestions.Add(new QuizSessionQuestion
+            var sessionQuestion = new QuizSessionQuestion
             {
                 QuizSessionId = session.Id,
-                QuestionId = question.Id,
-                QuestionOrder = order++
-            });
+                QuestionId = link.QuestionId,
+                QuestionOrder = order++,
+                OptionOrder = CreateShuffledOptionOrder()
+            };
 
-            _context.SeenQuestions.Add(new SeenQuestion
-            {
-                UserId = userId,
-                CategoryId = quiz.CategoryId,
-                QuestionId = question.Id
-            });
+            sessionQuestions.Add(sessionQuestion);
+            _context.QuizSessionQuestions.Add(sessionQuestion);
         }
 
         await _context.SaveChangesAsync();
 
-        var firstQuestion = selectedQuestions.First();
-
-        var secondsPerQuestion = quiz.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
+        var firstSessionQuestion = sessionQuestions.First();
+        var firstLink = selectedLinks.First();
+        var defaultSeconds = quiz.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
+        var firstTimer = ResolveQuestionTimer(quiz, firstLink, defaultSeconds);
 
         return new StartQuizResponseDto
         {
             SessionId = session.Id,
-            TotalQuestions = selectedQuestions.Count,
-            QuestionTimerSeconds = secondsPerQuestion,
-            DurationSeconds = secondsPerQuestion,
+            TotalQuestions = selectedLinks.Count,
+            QuestionTimerSeconds = firstTimer,
+            DurationSeconds = firstTimer,
             Title = quiz.Title,
-            FirstQuestion = new PlayQuestionDto
-            {
-                Id = firstQuestion.Id,
-                QuestionText = firstQuestion.QuestionText,
-                Option1 = firstQuestion.Option1,
-                Option2 = firstQuestion.Option2,
-                Option3 = firstQuestion.Option3
-            }
+            FirstQuestion = ToPlayQuestion(firstLink.Question, firstSessionQuestion.OptionOrder, firstTimer)
         };
     }
 
@@ -157,16 +123,25 @@ public class QuizService
             throw new Exception("Quiz has already been completed.");
         }
 
-        var question = await _context.Questions
-            .FirstOrDefaultAsync(q => q.Id == dto.QuestionId);
+        var sessionQuestion = await _context.QuizSessionQuestions
+            .Include(sq => sq.Question)
+            .FirstOrDefaultAsync(sq =>
+                sq.QuizSessionId == dto.SessionId &&
+                sq.QuestionId == dto.QuestionId);
 
-        if (question == null)
+        if (sessionQuestion?.Question == null)
         {
-            throw new Exception("Question not found.");
+            throw new Exception("Question not found in this quiz session.");
         }
 
-        bool isCorrect;
-        int points;
+        var question = sessionQuestion.Question;
+        var optionOrder = sessionQuestion.OptionOrder;
+
+        var quiz = session.QuizId.HasValue
+            ? await _context.Quizzes
+                .Include(q => q.QuizQuestions)
+                .FirstOrDefaultAsync(q => q.Id == session.QuizId.Value)
+            : null;
 
         var category = await _context.QuizCategories
             .FirstOrDefaultAsync(c => c.Id == session.CategoryId);
@@ -176,27 +151,60 @@ public class QuizService
             throw new Exception("Category not found.");
         }
 
-        if (dto.SelectedOption == 0)
+        bool isCorrect;
+        int points = 0;
+        int bonusAwarded = 0;
+        var timeTaken = Math.Max(0, dto.TimeTakenSeconds);
+
+        // Display position (1-3) from UI → original option index for scoring
+        var selectedOriginal = dto.SelectedOption == 0
+            ? 0
+            : DisplayToOriginal(dto.SelectedOption, optionOrder);
+
+        if (selectedOriginal == 0)
         {
             isCorrect = false;
             points = 0;
         }
         else
         {
-            isCorrect = question.CorrectOption == dto.SelectedOption;
+            isCorrect = question.CorrectOption == selectedOriginal;
 
-            points = isCorrect
-                ? category.CorrectPoints
-                : category.WrongPoints;
+            if (isCorrect)
+            {
+                points = category.CorrectPoints;
+
+                if (quiz != null && quiz.BonusPoints > 0 && quiz.BonusTimePercent > 0)
+                {
+                    var defaultSeconds = quiz.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
+                    var link = quiz.QuizQuestions.FirstOrDefault(qq => qq.QuestionId == question.Id);
+                    var questionTimer = link != null
+                        ? ResolveQuestionTimer(quiz, link, defaultSeconds)
+                        : defaultSeconds;
+
+                    // Bonus if answered within the first BonusTimePercent of this question's timer.
+                    var bonusWindowSeconds = questionTimer * quiz.BonusTimePercent / 100.0;
+                    if (timeTaken <= bonusWindowSeconds)
+                    {
+                        bonusAwarded = quiz.BonusPoints;
+                        points += bonusAwarded;
+                    }
+                }
+            }
+            else
+            {
+                points = category.WrongPoints;
+            }
         }
 
         _context.UserAnswers.Add(new UserAnswer
         {
             QuizSessionId = session.Id,
             QuestionId = question.Id,
-            SelectedOption = dto.SelectedOption,
+            SelectedOption = selectedOriginal,
             IsCorrect = isCorrect,
-            PointsAwarded = points
+            PointsAwarded = points,
+            TimeTakenSeconds = timeTaken
         });
 
         session.Score += points;
@@ -204,7 +212,11 @@ public class QuizService
 
         await _context.SaveChangesAsync();
 
+        // Correct option as shown on screen (shuffled display index)
+        var correctDisplayOption = OriginalToDisplay(question.CorrectOption, optionOrder);
+
         var sessionQuestions = await _context.QuizSessionQuestions
+            .Include(sq => sq.Question)
             .Where(q => q.QuizSessionId == session.Id)
             .OrderBy(q => q.QuestionOrder)
             .ToListAsync();
@@ -221,31 +233,29 @@ public class QuizService
                 IsCorrect = isCorrect,
                 Score = session.Score,
                 QuizCompleted = true,
-                CorrectOption = question.CorrectOption,
+                CorrectOption = correctDisplayOption,
+                PointsAwarded = points,
+                BonusAwarded = bonusAwarded,
                 NextQuestion = null
             };
         }
 
-        var nextQuestionId =
-            sessionQuestions[session.CurrentQuestionIndex].QuestionId;
-
-        var nextQuestion = await _context.Questions
-            .FirstAsync(q => q.Id == nextQuestionId);
+        var nextSessionQuestion = sessionQuestions[session.CurrentQuestionIndex];
+        var defaultSecondsNext = quiz?.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
+        var nextLink = quiz?.QuizQuestions.FirstOrDefault(qq => qq.QuestionId == nextSessionQuestion.QuestionId);
+        var nextTimer = quiz != null && nextLink != null
+            ? ResolveQuestionTimer(quiz, nextLink, defaultSecondsNext)
+            : defaultSecondsNext;
 
         return new SubmitAnswerResponseDto
         {
             IsCorrect = isCorrect,
             Score = session.Score,
             QuizCompleted = false,
-            CorrectOption = question.CorrectOption,
-            NextQuestion = new PlayQuestionDto
-            {
-                Id = nextQuestion.Id,
-                QuestionText = nextQuestion.QuestionText,
-                Option1 = nextQuestion.Option1,
-                Option2 = nextQuestion.Option2,
-                Option3 = nextQuestion.Option3
-            }
+            CorrectOption = correctDisplayOption,
+            PointsAwarded = points,
+            BonusAwarded = bonusAwarded,
+            NextQuestion = ToPlayQuestion(nextSessionQuestion.Question, nextSessionQuestion.OptionOrder, nextTimer)
         };
     }
 
@@ -272,6 +282,16 @@ public class QuizService
 
         int totalQuestions = answers.Count;
 
+        var category = await _context.QuizCategories
+            .FirstOrDefaultAsync(c => c.Id == session.CategoryId);
+
+        var correctPoints = category?.CorrectPoints ?? 0;
+        var bonusAnswers = answers.Count(a =>
+            a.IsCorrect && a.PointsAwarded > correctPoints);
+        var bonusPoints = answers
+            .Where(a => a.IsCorrect && a.PointsAwarded > correctPoints)
+            .Sum(a => a.PointsAwarded - correctPoints);
+
         double percentage = totalQuestions == 0
             ? 0
             : (double)correctAnswers / totalQuestions * 100;
@@ -284,6 +304,8 @@ public class QuizService
             WrongAnswers = wrongAnswers,
             SkippedAnswers = skippedAnswers,
             TotalQuestions = totalQuestions,
+            BonusPoints = bonusPoints,
+            BonusAnswers = bonusAnswers,
             Percentage = percentage,
             CompletedAt = session.CompletedAt
         };
@@ -292,5 +314,72 @@ public class QuizService
     public async Task<List<QuizHistoryDto>> GetQuizHistoryAsync(int userId)
     {
         throw new NotImplementedException();
+    }
+
+    private static int ResolveQuestionTimer(Quiz quiz, QuizQuestion link, int defaultSeconds)
+    {
+        if (quiz.UsePerQuestionTimer && link.TimerSeconds > 0)
+            return link.TimerSeconds;
+
+        return defaultSeconds > 0 ? defaultSeconds : 10;
+    }
+
+    /// <summary>Random display order of original options, e.g. "3,1,2".</summary>
+    private static string CreateShuffledOptionOrder()
+        => string.Join(",", new[] { 1, 2, 3 }.OrderBy(_ => Guid.NewGuid()));
+
+    private static int[] ParseOptionOrder(string? optionOrder)
+    {
+        var parts = (optionOrder ?? "1,2,3")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (parts.Length != 3)
+            return new[] { 1, 2, 3 };
+
+        var nums = new int[3];
+        for (var i = 0; i < 3; i++)
+        {
+            if (!int.TryParse(parts[i], out nums[i]) || nums[i] < 1 || nums[i] > 3)
+                return new[] { 1, 2, 3 };
+        }
+
+        if (nums.Distinct().Count() != 3)
+            return new[] { 1, 2, 3 };
+
+        return nums;
+    }
+
+    private static PlayQuestionDto ToPlayQuestion(Question question, string optionOrder, int timerSeconds)
+    {
+        var order = ParseOptionOrder(optionOrder);
+        var options = new[] { question.Option1, question.Option2, question.Option3 };
+
+        return new PlayQuestionDto
+        {
+            Id = question.Id,
+            QuestionText = question.QuestionText,
+            Option1 = options[order[0] - 1],
+            Option2 = options[order[1] - 1],
+            Option3 = options[order[2] - 1],
+            TimerSeconds = timerSeconds > 0 ? timerSeconds : 10
+        };
+    }
+
+    /// <summary>Map UI button (1-3) to original option index using session shuffle.</summary>
+    private static int DisplayToOriginal(int displayOption, string optionOrder)
+    {
+        if (displayOption < 1 || displayOption > 3)
+            return 0;
+
+        var order = ParseOptionOrder(optionOrder);
+        return order[displayOption - 1];
+    }
+
+    /// <summary>Map original correct option to UI button index after shuffle.</summary>
+    private static int OriginalToDisplay(int originalOption, string optionOrder)
+    {
+        var order = ParseOptionOrder(optionOrder);
+        var index = Array.IndexOf(order, originalOption);
+        return index >= 0 ? index + 1 : originalOption;
     }
 }

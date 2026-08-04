@@ -6,9 +6,9 @@
 </head>
 <body>
 
-<h2>Quiz Login</h2>
+<h2 id="pageTitle">Quiz Login</h2>
 
-<div class="role-row">
+<div class="role-row" id="roleRow">
     <label>
         <input type="radio" name="role" value="user" checked onchange="onRoleChange()">
         User
@@ -21,7 +21,12 @@
 
 <br>
 
-<input id="email" placeholder="Email">
+<div id="registerFields" style="display:none;">
+    <input id="fullName" placeholder="Full Name">
+    <br><br>
+</div>
+
+<input id="email" placeholder="Email" type="email">
 
 <br><br>
 
@@ -29,9 +34,14 @@
 
 <br><br>
 
-<button onclick="login()">Login</button>
+<button type="button" id="primaryBtn" onclick="submitAuth()">Login</button>
 
 <p id="loginHint" class="muted">Player: use your registered email</p>
+
+<p id="authSwitch" class="muted">
+    <span id="authSwitchText">New player?</span>
+    <a href="#" id="authSwitchLink" onclick="toggleAuthMode(event)">Register here</a>
+</p>
 
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>

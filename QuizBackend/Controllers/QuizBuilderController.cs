@@ -112,6 +112,25 @@ public class QuizBuilderController : ControllerBase
         }
     }
 
+    [HttpPut("{id}/questions/{questionId}/timer")]
+    public async Task<IActionResult> UpdateQuestionTimer(
+        int id,
+        int questionId,
+        UpdateQuizQuestionTimerDto dto)
+    {
+        try
+        {
+            await _service.UpdateQuestionTimerAsync(id, questionId, dto.TimerSeconds);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            if (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+                return NotFound(ex.Message);
+            return BadRequest(ex.Message);
+        }
+    }
+
     [HttpPost("{id}/random")]
     public async Task<IActionResult> AddRandom(int id, RandomQuizQuestionsDto dto)
     {

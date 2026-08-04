@@ -10,6 +10,12 @@ public class UpdateQuizDto
 
     public int DurationSeconds { get; set; }
 
+    public bool UsePerQuestionTimer { get; set; }
+
+    public int BonusTimePercent { get; set; }
+
+    public int BonusPoints { get; set; }
+
     public bool IsActive { get; set; }
 
     public DateTime? StartDate { get; set; }

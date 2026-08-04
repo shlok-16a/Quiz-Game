@@ -13,6 +13,16 @@ body {
     margin-bottom: 8px;
 }
 
+#authSwitch a {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+#authSwitch a:hover {
+    text-decoration: underline;
+}
+
 .muted { color: #6b7280; }
 .ok { color: #15803d; }
 .err { color: #b91c1c; }

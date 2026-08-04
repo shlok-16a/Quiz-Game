@@ -19,4 +19,10 @@ public class QuestionResponseDto
     public int CategoryId { get; set; }
 
     public string CategoryName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Seconds for this question inside a quiz (0 = use quiz default).
+    /// Only populated for quiz-question list endpoints.
+    /// </summary>
+    public int TimerSeconds { get; set; }
 }

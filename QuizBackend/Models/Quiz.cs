@@ -16,8 +16,24 @@ public class Quiz
     /// <summary>Target number of questions for this quiz.</summary>
     public int QuestionCount { get; set; } = 10;
 
-    /// <summary>Time allowed for each question (seconds).</summary>
+    /// <summary>Default time allowed for each question (seconds).</summary>
     public int DurationSeconds { get; set; } = 10;
+
+    /// <summary>
+    /// When true, each quiz question uses its own <see cref="QuizQuestion.TimerSeconds"/>.
+    /// When false, every question uses <see cref="DurationSeconds"/>.
+    /// </summary>
+    public bool UsePerQuestionTimer { get; set; } = false;
+
+    /// <summary>
+    /// Answer correctly within this percent of the question timer to earn bonus
+    /// (e.g. 40 on a 10s question = within first 4 seconds).
+    /// 0 disables bonus.
+    /// </summary>
+    public int BonusTimePercent { get; set; } = 0;
+
+    /// <summary>Extra points added on top of correct points when bonus is earned.</summary>
+    public int BonusPoints { get; set; } = 0;
 
     public bool IsActive { get; set; } = false;
 

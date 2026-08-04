@@ -43,9 +43,32 @@
             <label>Total Questions (target)</label>
             <input id="questionCount" type="number" value="10" min="1">
 
-            <label>Seconds per question</label>
-            <input id="questionTimerSeconds" type="number" value="10" min="1">
-            <p class="muted">Each question in this quiz gets this many seconds.</p>
+            <label>Timer mode</label>
+            <select id="timerMode">
+                <option value="global">Seconds per question (same for all)</option>
+                <option value="perQuestion">Timer per question (set on each question)</option>
+            </select>
+
+            <div id="globalTimerFields">
+                <label>Seconds per question</label>
+                <input id="questionTimerSeconds" type="number" value="10" min="1">
+                <p class="muted">Each question in this quiz gets this many seconds.</p>
+            </div>
+            <p id="perQuestionTimerHint" class="muted" style="display:none;">
+                Default seconds (used when adding questions). You can change each question’s timer on the Edit Questions page.
+            </p>
+            <div id="defaultTimerFields" style="display:none;">
+                <label>Default seconds for new questions</label>
+                <input id="defaultQuestionTimerSeconds" type="number" value="10" min="1">
+            </div>
+
+            <label>Bonus time threshold (%)</label>
+            <input id="bonusTimePercent" type="number" value="0" min="0" max="100">
+            <p class="muted">Correct answer within this % of that question’s timer earns bonus. 0 = disabled. Example: 50 on a 10s question = within first 5s.</p>
+
+            <label>Bonus points</label>
+            <input id="bonusPoints" type="number" value="0" min="0">
+            <p class="muted">Added on top of correct points when the bonus threshold is met.</p>
 
             <label>Active From (IST)</label>
             <input id="startDate" type="datetime-local">
@@ -85,9 +108,23 @@
         document.getElementById("createCard").style.display = "none";
     }
 
-    function formatQuestionTimer(seconds) {
-        const s = Number(seconds) || 0;
+    function formatQuestionTimer(q) {
+        if (q.usePerQuestionTimer) {
+            return "Per question (custom)";
+        }
+        const s = Number(q.durationSeconds) || 0;
         return `${s} sec / question`;
+    }
+
+    function syncTimerModeUi() {
+        const perQuestion = document.getElementById("timerMode").value === "perQuestion";
+        document.getElementById("globalTimerFields").style.display = perQuestion ? "none" : "block";
+        document.getElementById("perQuestionTimerHint").style.display = perQuestion ? "block" : "none";
+        document.getElementById("defaultTimerFields").style.display = perQuestion ? "block" : "none";
+        if (perQuestion) {
+            document.getElementById("defaultQuestionTimerSeconds").value =
+                document.getElementById("questionTimerSeconds").value || 10;
+        }
     }
 
     function updateCategoryPoints() {
@@ -127,12 +164,20 @@
             return;
         }
 
+        const usePerQuestionTimer = document.getElementById("timerMode").value === "perQuestion";
+        const durationSeconds = usePerQuestionTimer
+            ? Number(document.getElementById("defaultQuestionTimerSeconds").value)
+            : Number(document.getElementById("questionTimerSeconds").value);
+
         const body = {
             title: document.getElementById("title").value.trim(),
             categoryId: Number(document.getElementById("categoryId").value),
             rulesText: document.getElementById("rulesText").value.trim(),
             questionCount: Number(document.getElementById("questionCount").value),
-            durationSeconds: Number(document.getElementById("questionTimerSeconds").value),
+            durationSeconds,
+            usePerQuestionTimer,
+            bonusTimePercent: Number(document.getElementById("bonusTimePercent").value) || 0,
+            bonusPoints: Number(document.getElementById("bonusPoints").value) || 0,
             isActive: document.getElementById("isActive").checked,
             startDate: istLocalToIso(startDate),
             endDate: istLocalToIso(endDate)
@@ -205,7 +250,10 @@
                 <h3>${q.title}</h3>
                 <p>Category: <strong>${q.categoryName}</strong></p>
                 <p>Questions: ${q.assignedQuestions} / ${q.questionCount}</p>
-                <p>Timer: ${formatQuestionTimer(q.durationSeconds)}</p>
+                <p>Timer: ${formatQuestionTimer(q)}</p>
+                ${Number(q.bonusTimePercent) > 0 && Number(q.bonusPoints) > 0
+                    ? `<p>Bonus: +${q.bonusPoints} if correct within ${q.bonusTimePercent}% of question time</p>`
+                    : ""}
                 <p>Active From: ${formatIst(q.startDate)}</p>
                 <p>Active Until: ${formatIst(q.endDate)}</p>
                 <p>Status: ${status}</p>
@@ -225,6 +273,8 @@
     (async () => {
         await loadCategories();
         document.getElementById("categoryId").onchange = updateCategoryPoints;
+        document.getElementById("timerMode").onchange = syncTimerModeUi;
+        syncTimerModeUi();
         await loadQuizzes();
     })().catch(err => alert(err.message));
 </script>
