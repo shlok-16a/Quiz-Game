@@ -22,5 +22,15 @@ public class QuizResultDto
 
     public double Percentage { get; set; }
 
+    public DateTime StartedAt { get; set; }
+
     public DateTime? CompletedAt { get; set; }
+
+    /// <summary>Wall-clock seconds from quiz start to finish.</summary>
+    public int DurationSeconds { get; set; }
+
+    /// <summary>1-based rank among completed attempts for this quiz (score, then finish time).</summary>
+    public int? Rank { get; set; }
+
+    public int TotalCompletions { get; set; }
 }

@@ -49,6 +49,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 builder.Services.AddScoped<QuestionService>();
+builder.Services.AddScoped<QuizRankingService>();
 builder.Services.AddScoped<QuizService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AdminService>();

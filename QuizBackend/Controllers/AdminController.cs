@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using QuizBackend.DTOs.Admin;
+using QuizBackend.DTOs.Quiz;
 using QuizBackend.Services;
 
 namespace QuizBackend.Controllers;
@@ -9,15 +10,27 @@ namespace QuizBackend.Controllers;
 public class AdminController : ControllerBase
 {
     private readonly AdminService _adminService;
+    private readonly QuizRankingService _rankingService;
 
-    public AdminController(AdminService adminService)
+    public AdminController(AdminService adminService, QuizRankingService rankingService)
     {
         _adminService = adminService;
+        _rankingService = rankingService;
     }
 
     [HttpGet("stats")]
     public async Task<ActionResult<DashboardStatsDto>> GetStats()
     {
         return Ok(await _adminService.GetDashboardStatsAsync());
+    }
+
+    /// <summary>
+    /// Leaderboard for a quiz: highest score first; then shortest duration; then earlier finish time.
+    /// </summary>
+    [HttpGet("leaderboard/{quizId}")]
+    public async Task<ActionResult<QuizLeaderboardDto>> GetLeaderboard(int quizId)
+    {
+        var leaderboard = await _rankingService.GetLeaderboardAsync(quizId);
+        return leaderboard == null ? NotFound("Quiz not found.") : Ok(leaderboard);
     }
 }

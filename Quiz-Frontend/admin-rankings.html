@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rankings</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <h1>Quiz Admin</h1>
+        <a href="admin-dashboard.html">Dashboard</a>
+        <a href="admin-categories.html">Categories</a>
+        <a href="admin-questions.html">Questions</a>
+        <a href="admin-quizzes.html">Make Quiz</a>
+        <a class="active" href="admin-rankings.html">Rankings</a>
+        <a href="admin-upload.html">CSV Upload</a>
+        <button type="button" class="secondary" onclick="adminLogout()">Logout</button>
+    </aside>
+
+    <main class="content">
+        <h2>Quiz Rankings</h2>
+        <p class="muted">Ranked by score (highest first). Equal scores: shortest duration wins. Same duration: who finished first wins.</p>
+
+        <div class="filters" style="grid-template-columns: 1fr 1fr;">
+            <div>
+                <label for="categorySelect">Select category</label>
+                <select id="categorySelect">
+                    <option value="">— Choose a category —</option>
+                </select>
+            </div>
+            <div>
+                <label for="quizSelect">Select quiz</label>
+                <select id="quizSelect" disabled>
+                    <option value="">— Choose a quiz —</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="summary" class="card" style="display:none; margin-top:16px;">
+            <h3 id="quizTitle"></h3>
+            <p id="quizMeta" class="muted"></p>
+        </div>
+
+        <div id="emptyState" class="muted" style="margin-top:20px; display:none;">
+            No completed attempts for this quiz yet.
+        </div>
+
+        <div id="noQuizzesHint" class="muted" style="margin-top:20px; display:none;">
+            No quizzes in this category.
+        </div>
+
+        <div id="tableWrap" style="display:none; margin-top:16px; overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Player</th>
+                        <th>Email</th>
+                        <th>Score</th>
+                        <th>Duration</th>
+                        <th>Started</th>
+                        <th>Finished</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboardBody"></tbody>
+            </table>
+        </div>
+    </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    requireAdmin();
+
+    let allQuizzes = [];
+
+    function formatDuration(seconds) {
+        const s = Math.max(0, Number(seconds) || 0);
+        const m = Math.floor(s / 60);
+        const rem = s % 60;
+        if (m === 0) return `${rem}s`;
+        return `${m}m ${String(rem).padStart(2, "0")}s`;
+    }
+
+    function clearLeaderboard() {
+        document.getElementById("summary").style.display = "none";
+        document.getElementById("emptyState").style.display = "none";
+        document.getElementById("tableWrap").style.display = "none";
+        document.getElementById("leaderboardBody").innerHTML = "";
+    }
+
+    function resetQuizSelect(placeholder) {
+        const select = document.getElementById("quizSelect");
+        select.innerHTML = `<option value="">${placeholder}</option>`;
+        select.value = "";
+        select.disabled = true;
+    }
+
+    function populateQuizSelect(categoryId) {
+        const select = document.getElementById("quizSelect");
+        const hint = document.getElementById("noQuizzesHint");
+        clearLeaderboard();
+        hint.style.display = "none";
+
+        if (!categoryId) {
+            resetQuizSelect("— Choose a quiz —");
+            return;
+        }
+
+        const quizzes = allQuizzes
+            .filter(q => String(q.categoryId) === String(categoryId))
+            .sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+
+        select.innerHTML = `<option value="">— Choose a quiz —</option>`;
+        quizzes.forEach(q => {
+            const opt = document.createElement("option");
+            opt.value = q.id;
+            opt.textContent = `${q.title}${q.isActive ? "" : " (inactive)"}`;
+            select.appendChild(opt);
+        });
+
+        if (quizzes.length === 0) {
+            select.disabled = true;
+            hint.style.display = "block";
+            return;
+        }
+
+        select.disabled = false;
+    }
+
+    async function loadFilters() {
+        const [categories, quizzes] = await Promise.all([
+            apiGet("/api/Category"),
+            apiGet("/api/QuizBuilder")
+        ]);
+
+        allQuizzes = quizzes || [];
+
+        const categorySelect = document.getElementById("categorySelect");
+        (categories || [])
+            .slice()
+            .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+            .forEach(c => {
+                const opt = document.createElement("option");
+                opt.value = c.id;
+                opt.textContent = c.name;
+                categorySelect.appendChild(opt);
+            });
+    }
+
+    async function loadLeaderboard(quizId) {
+        const summary = document.getElementById("summary");
+        const emptyState = document.getElementById("emptyState");
+        const tableWrap = document.getElementById("tableWrap");
+        const body = document.getElementById("leaderboardBody");
+        document.getElementById("noQuizzesHint").style.display = "none";
+
+        if (!quizId) {
+            clearLeaderboard();
+            return;
+        }
+
+        const data = await apiGet(`/api/Admin/leaderboard/${quizId}`);
+        document.getElementById("quizTitle").textContent = data.quizTitle;
+        document.getElementById("quizMeta").textContent =
+            `${data.categoryName || "—"} · ${data.totalCompletions} completion${data.totalCompletions === 1 ? "" : "s"}`;
+        summary.style.display = "block";
+
+        const entries = data.entries || [];
+        if (entries.length === 0) {
+            emptyState.style.display = "block";
+            tableWrap.style.display = "none";
+            body.innerHTML = "";
+            return;
+        }
+
+        emptyState.style.display = "none";
+        tableWrap.style.display = "block";
+        body.innerHTML = entries.map(e => `
+            <tr>
+                <td>${e.rank}</td>
+                <td>${escapeHtml(e.fullName)}</td>
+                <td>${escapeHtml(e.email)}</td>
+                <td>${e.score}</td>
+                <td>${formatDuration(e.durationSeconds)}</td>
+                <td>${formatIst(e.startedAt)}</td>
+                <td>${formatIst(e.completedAt)}</td>
+            </tr>
+        `).join("");
+    }
+
+    function escapeHtml(text) {
+        return String(text ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+    }
+
+    document.getElementById("categorySelect").addEventListener("change", (e) => {
+        populateQuizSelect(e.target.value);
+    });
+
+    document.getElementById("quizSelect").addEventListener("change", (e) => {
+        loadLeaderboard(e.target.value).catch(err => alert(err.message));
+    });
+
+    loadFilters().catch(err => alert(err.message));
+</script>
+</body>
+</html>

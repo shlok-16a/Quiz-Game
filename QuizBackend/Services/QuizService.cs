@@ -8,10 +8,12 @@ namespace QuizBackend.Services;
 public class QuizService
 {
     private readonly QuizDbContext _context;
+    private readonly QuizRankingService _rankingService;
 
-    public QuizService(QuizDbContext context)
+    public QuizService(QuizDbContext context, QuizRankingService rankingService)
     {
         _context = context;
+        _rankingService = rankingService;
     }
 
     public async Task<StartQuizResponseDto> StartQuizAsync(int userId, StartQuizRequestDto dto)
@@ -296,6 +298,19 @@ public class QuizService
             ? 0
             : (double)correctAnswers / totalQuestions * 100;
 
+        var durationSeconds = session.CompletedAt.HasValue
+            ? (int)Math.Max(0, (session.CompletedAt.Value - session.StartedAt).TotalSeconds)
+            : 0;
+
+        int? rank = null;
+        var totalCompletions = 0;
+        var rankInfo = await _rankingService.GetSessionRankAsync(sessionId);
+        if (rankInfo.HasValue)
+        {
+            rank = rankInfo.Value.Rank;
+            totalCompletions = rankInfo.Value.TotalCompletions;
+        }
+
         return new QuizResultDto
         {
             SessionId = session.Id,
@@ -307,7 +322,11 @@ public class QuizService
             BonusPoints = bonusPoints,
             BonusAnswers = bonusAnswers,
             Percentage = percentage,
-            CompletedAt = session.CompletedAt
+            StartedAt = session.StartedAt,
+            CompletedAt = session.CompletedAt,
+            DurationSeconds = durationSeconds,
+            Rank = rank,
+            TotalCompletions = totalCompletions
         };
     }
 

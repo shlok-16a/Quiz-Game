@@ -36,6 +36,21 @@ async function loadResult() {
 
     document.getElementById("percentage").innerText =
         `Percentage : ${data.percentage ?? data.Percentage}%`;
+
+    const rank = data.rank ?? data.Rank;
+    const total = data.totalCompletions ?? data.TotalCompletions ?? 0;
+    document.getElementById("rank").innerText = rank
+        ? `Rank : #${rank} of ${total}`
+        : `Rank : —`;
+
+    const durationSeconds = Number(data.durationSeconds ?? data.DurationSeconds ?? 0);
+    const mins = Math.floor(durationSeconds / 60);
+    const secs = durationSeconds % 60;
+    const durationLabel = mins > 0
+        ? `${mins}m ${String(secs).padStart(2, "0")}s`
+        : `${secs}s`;
+    document.getElementById("duration").innerText =
+        `Time Taken : ${durationLabel}`;
 }
 
 function goBack() {
