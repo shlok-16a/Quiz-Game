@@ -56,6 +56,7 @@ async function loadResult() {
 function goBack() {
     localStorage.removeItem("quiz");
     localStorage.removeItem("quizQuestionNumber");
+    localStorage.removeItem("quizRunningScore");
     localStorage.removeItem("resultSession");
     window.location.href = "categories.html";
 }

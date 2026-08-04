@@ -19,11 +19,88 @@
 
     <main class="content">
         <h2>Quiz Admin Dashboard</h2>
+        <p class="muted">Basic reporting across categories, quizzes, and question accuracy.</p>
+
+        <div class="card filters dashboard-filters">
+            <div>
+                <label>Category</label>
+                <select id="filterCategoryId">
+                    <option value="">All categories</option>
+                </select>
+            </div>
+            <div style="align-self:end;">
+                <button type="button" id="filterBtn">Apply</button>
+            </div>
+        </div>
+
         <div class="stats">
             <div class="card stat"><h3>Total Categories</h3><p id="categories">-</p></div>
             <div class="card stat"><h3>Total Questions</h3><p id="questions">-</p></div>
             <div class="card stat"><h3>Total Players</h3><p id="players">-</p></div>
-            <div class="card stat"><h3>Total Quiz Sessions</h3><p id="sessions">-</p></div>
+            <div class="card stat"><h3>Total Plays</h3><p id="sessions">-</p></div>
+            <div class="card stat"><h3>Completion Rate</h3><p id="completionRate">-</p></div>
+            <div class="card stat"><h3>Avg Score (completed)</h3><p id="avgScore">-</p></div>
+        </div>
+
+        <div class="card" style="margin-top:18px;">
+            <h3>Plays per Category</h3>
+            <p class="muted">Sessions started in each category, with completion and average score.</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Plays</th>
+                        <th>Completed</th>
+                        <th>Completion %</th>
+                        <th>Avg Score</th>
+                    </tr>
+                </thead>
+                <tbody id="categoryRows">
+                    <tr><td colspan="5" class="muted">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Plays per Quiz</h3>
+            <p class="muted">Per-quiz play counts, completion rate, and average score.</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Quiz</th>
+                        <th>Category</th>
+                        <th>Plays</th>
+                        <th>Completed</th>
+                        <th>Completion %</th>
+                        <th>Avg Score</th>
+                    </tr>
+                </thead>
+                <tbody id="quizRows">
+                    <tr><td colspan="6" class="muted">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Most Missed Questions</h3>
+            <p class="muted">Lowest accuracy / most wrong answers — useful for catching a mis-tagged correct option.</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Question</th>
+                        <th>Category</th>
+                        <th>Attempts</th>
+                        <th>Correct</th>
+                        <th>Wrong</th>
+                        <th>Skipped</th>
+                        <th>Accuracy</th>
+                    </tr>
+                </thead>
+                <tbody id="missedRows">
+                    <tr><td colspan="8" class="muted">Loading...</td></tr>
+                </tbody>
+            </table>
         </div>
     </main>
 </div>
@@ -32,15 +109,102 @@
 <script>
     requireAdmin();
 
-    async function loadStats() {
-        const data = await apiGet("/api/Admin/stats");
-        document.getElementById("categories").innerText = data.totalCategories;
-        document.getElementById("questions").innerText = data.totalQuestions;
-        document.getElementById("players").innerText = data.totalPlayers;
-        document.getElementById("sessions").innerText = data.totalQuizSessions;
+    function escapeHtml(text) {
+        return String(text ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
     }
 
-    loadStats().catch(err => alert(err.message));
+    function pct(value) {
+        const n = Number(value) || 0;
+        return `${n.toFixed(1)}%`;
+    }
+
+    function score(value) {
+        const n = Number(value) || 0;
+        return Number.isInteger(n) ? String(n) : n.toFixed(1);
+    }
+
+    async function loadCategories() {
+        const categories = await apiGet("/api/Category");
+        document.getElementById("filterCategoryId").innerHTML =
+            `<option value="">All categories</option>` +
+            categories.map(c =>
+                `<option value="${c.id}">${escapeHtml(c.name)}</option>`
+            ).join("");
+    }
+
+    async function loadReport() {
+        const categoryId = document.getElementById("filterCategoryId").value;
+        const params = new URLSearchParams({ mostMissed: "10" });
+        if (categoryId) params.append("categoryId", categoryId);
+
+        const data = await apiGet(`/api/Admin/report?${params.toString()}`);
+        const summary = data.summary || {};
+
+        document.getElementById("categories").innerText = summary.totalCategories ?? 0;
+        document.getElementById("questions").innerText = summary.totalQuestions ?? 0;
+        document.getElementById("players").innerText = summary.totalPlayers ?? 0;
+        document.getElementById("sessions").innerText = summary.totalQuizSessions ?? 0;
+        document.getElementById("completionRate").innerText = pct(data.overallCompletionRate);
+        document.getElementById("avgScore").innerText = score(data.overallAverageScore);
+
+        const categoryRows = document.getElementById("categoryRows");
+        const categories = data.categoryPlays || [];
+        categoryRows.innerHTML = categories.length
+            ? categories.map(c => `
+                <tr>
+                    <td>${escapeHtml(c.categoryName)}</td>
+                    <td>${c.totalPlays}</td>
+                    <td>${c.completedPlays}</td>
+                    <td>${pct(c.completionRate)}</td>
+                    <td>${score(c.averageScore)}</td>
+                </tr>`).join("")
+            : `<tr><td colspan="5" class="muted">No category play data yet.</td></tr>`;
+
+        const quizRows = document.getElementById("quizRows");
+        const quizzes = data.quizPlays || [];
+        quizRows.innerHTML = quizzes.length
+            ? quizzes.map(q => `
+                <tr>
+                    <td>${escapeHtml(q.quizTitle)}</td>
+                    <td>${escapeHtml(q.categoryName)}</td>
+                    <td>${q.totalPlays}</td>
+                    <td>${q.completedPlays}</td>
+                    <td>${pct(q.completionRate)}</td>
+                    <td>${score(q.averageScore)}</td>
+                </tr>`).join("")
+            : `<tr><td colspan="6" class="muted">No quiz play data yet.</td></tr>`;
+
+        const missedRows = document.getElementById("missedRows");
+        const missed = data.mostMissedQuestions || [];
+        missedRows.innerHTML = missed.length
+            ? missed.map(q => {
+                const lowAccuracy = Number(q.accuracyPercent) < 40;
+                return `
+                <tr class="${lowAccuracy ? "report-warn" : ""}">
+                    <td>${q.questionId}</td>
+                    <td>${escapeHtml(q.questionText)}</td>
+                    <td>${escapeHtml(q.categoryName)}</td>
+                    <td>${q.totalAttempts}</td>
+                    <td>${q.correctCount}</td>
+                    <td>${q.wrongCount}</td>
+                    <td>${q.skippedCount}</td>
+                    <td><strong>${pct(q.accuracyPercent)}</strong></td>
+                </tr>`;
+            }).join("")
+            : `<tr><td colspan="8" class="muted">No answer data yet. Play some quizzes first.</td></tr>`;
+    }
+
+    document.getElementById("filterBtn").onclick = () => loadReport().catch(err => alert(err.message));
+    document.getElementById("filterCategoryId").onchange = () => loadReport().catch(err => alert(err.message));
+
+    (async () => {
+        await loadCategories();
+        await loadReport();
+    })().catch(err => alert(err.message));
 </script>
 </body>
 </html>

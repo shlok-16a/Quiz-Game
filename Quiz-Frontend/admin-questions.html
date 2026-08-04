@@ -32,7 +32,7 @@
             </div>
             <div>
                 <label>Search</label>
-                <input id="filterSearch" placeholder="Search question text">
+                <input id="filterSearch" placeholder="Search by question text or ID">
             </div>
             <div>
                 <label>Difficulty</label>
@@ -41,6 +41,14 @@
                     <option value="Easy">Easy</option>
                     <option value="Medium">Medium</option>
                     <option value="Hard">Hard</option>
+                </select>
+            </div>
+            <div>
+                <label>Status</label>
+                <select id="filterStatus">
+                    <option value="">All</option>
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
                 </select>
             </div>
             <div style="align-self:end;">
@@ -100,9 +108,10 @@
                             <input type="checkbox" id="selectAll" title="Select all">
                         </th>
                         <th>ID</th>
-                        <th>Question</th>
+                        <th>Question &amp; Options</th>
                         <th>Category</th>
                         <th>Difficulty</th>
+                        <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -118,6 +127,14 @@
 
     let categories = [];
     let questionsById = {};
+    let searchDebounceId = null;
+
+    function scheduleSearchReload() {
+        clearTimeout(searchDebounceId);
+        searchDebounceId = setTimeout(() => {
+            loadQuestions().catch(err => alert(err.message));
+        }, 300);
+    }
 
     function escapeHtml(text) {
         return String(text ?? "")
@@ -167,11 +184,13 @@
         const categoryId = document.getElementById("filterCategoryId").value;
         const search = document.getElementById("filterSearch").value.trim();
         const difficulty = document.getElementById("filterDifficulty").value;
+        const status = document.getElementById("filterStatus").value;
 
         const params = new URLSearchParams();
         if (categoryId) params.append("categoryId", categoryId);
         if (search) params.append("search", search);
         if (difficulty) params.append("difficulty", difficulty);
+        if (status !== "") params.append("isActive", status);
 
         const query = params.toString();
         const url = query ? `/api/Question?${query}` : "/api/Question";
@@ -189,29 +208,59 @@
         const rows = document.getElementById("rows");
 
         if (!questions.length) {
-            rows.innerHTML = `<tr><td colspan="6" class="muted">No questions found.</td></tr>`;
+            rows.innerHTML = `<tr><td colspan="7" class="muted">No questions found.</td></tr>`;
             updateSelectionUi();
             return;
         }
 
-        rows.innerHTML = questions.map(q => `
-            <tr>
+        rows.innerHTML = questions.map(q => {
+            const active = q.isActive !== false;
+            const correct = Number(q.correctOption) || 0;
+            const statusBadge = active
+                ? `<span class="status-badge active">Active</span>`
+                : `<span class="status-badge inactive">Inactive</span>`;
+            const toggleBtn = active
+                ? `<button type="button" class="secondary" data-active="false" data-id="${q.id}">Deactivate</button>`
+                : `<button type="button" data-active="true" data-id="${q.id}">Activate</button>`;
+
+            const optionsHtml = [1, 2, 3].map(n => {
+                const text = q[`option${n}`] ?? "";
+                const isCorrect = correct === n;
+                return `<li class="${isCorrect ? "correct-option" : ""}">
+                    <span class="opt-label">${n}.</span>${escapeHtml(text)}${isCorrect ? " ✓" : ""}
+                </li>`;
+            }).join("");
+
+            return `
+            <tr class="${active ? "" : "question-inactive"}">
                 <td class="col-check">
                     <input type="checkbox" class="row-check" value="${q.id}">
                 </td>
                 <td>${q.id}</td>
-                <td>${escapeHtml(q.questionText)}</td>
+                <td>
+                    <div>${escapeHtml(q.questionText)}</div>
+                    <ul class="question-options-list">${optionsHtml}</ul>
+                </td>
                 <td>${escapeHtml(q.categoryName)}</td>
                 <td>${escapeHtml(q.difficulty)}</td>
+                <td>${statusBadge}</td>
                 <td class="row">
                     <button type="button" class="secondary" data-edit="${q.id}">Edit</button>
+                    ${toggleBtn}
                     <button type="button" class="danger" data-delete="${q.id}">Delete</button>
                 </td>
-            </tr>
-        `).join("");
+            </tr>`;
+        }).join("");
 
         rows.querySelectorAll("[data-edit]").forEach(btn => {
             btn.onclick = () => openEdit(Number(btn.dataset.edit));
+        });
+
+        rows.querySelectorAll("[data-active]").forEach(btn => {
+            btn.onclick = () => setQuestionActive(
+                Number(btn.dataset.id),
+                btn.dataset.active === "true"
+            );
         });
 
         rows.querySelectorAll("[data-delete]").forEach(btn => {
@@ -318,6 +367,20 @@
         }
     }
 
+    async function setQuestionActive(id, isActive) {
+        const action = isActive ? "activate" : "deactivate";
+        if (!confirm(`${isActive ? "Activate" : "Deactivate"} question #${id}?\n\nDeactivated questions stay in existing quizzes but won't be added to new ones.`)) {
+            return;
+        }
+
+        try {
+            await apiSend(`/api/Question/${id}/active`, "PUT", { isActive });
+            await loadQuestions();
+        } catch (err) {
+            alert(err.message || `Unable to ${action} question.`);
+        }
+    }
+
     async function deleteSelected() {
         const ids = getSelectedIds();
         if (!ids.length) return;
@@ -347,8 +410,13 @@
     document.getElementById("filterBtn").onclick = () => loadQuestions();
     document.getElementById("filterCategoryId").onchange = () => loadQuestions();
     document.getElementById("filterDifficulty").onchange = () => loadQuestions();
+    document.getElementById("filterStatus").onchange = () => loadQuestions();
+    document.getElementById("filterSearch").oninput = () => scheduleSearchReload();
     document.getElementById("filterSearch").onkeydown = (e) => {
-        if (e.key === "Enter") loadQuestions();
+        if (e.key === "Enter") {
+            clearTimeout(searchDebounceId);
+            loadQuestions().catch(err => alert(err.message));
+        }
     };
 
     (async () => {

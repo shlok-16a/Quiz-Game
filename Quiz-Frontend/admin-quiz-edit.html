@@ -257,11 +257,14 @@
         }
 
         const perQuestion = quiz?.usePerQuestionTimer;
-        box.innerHTML = assigned.map(q => `
+        box.innerHTML = assigned.map(q => {
+            const inactive = q.isActive === false;
+            return `
             <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px; border-bottom:1px solid #e5e7eb; padding:10px 0;">
                 <div style="flex:1; min-width:0;">
                     <strong>#${q.id}</strong> ${escapeHtml(q.questionText)}
-                    <div class="muted">${escapeHtml(q.difficulty)} · Correct: ${q.correctOption}</div>
+                    ${inactive ? ` <span class="status-badge inactive">Inactive</span>` : ""}
+                    <div class="muted">${escapeHtml(q.difficulty)} · Correct: ${q.correctOption}${inactive ? " · kept for this quiz history" : ""}</div>
                     ${perQuestion ? `
                     <div class="row" style="margin-top:8px; align-items:center; gap:8px;">
                         <label style="margin:0;">Timer (sec)</label>
@@ -271,18 +274,18 @@
                     <div class="muted" style="margin-top:6px;">Timer: ${Math.max(1, Number(quiz.durationSeconds) || 10)} sec (quiz default)</div>`}
                 </div>
                 <button type="button" class="danger" onclick="removeQuestion(${q.id})">Delete</button>
-            </div>
-        `).join("");
+            </div>`;
+        }).join("");
     }
 
     async function loadPool() {
-        const pool = await apiGet(`/api/Question?categoryId=${quiz.categoryId}`);
+        const pool = await apiGet(`/api/Question?categoryId=${quiz.categoryId}&isActive=true`);
         const assignedIds = new Set(assigned.map(q => q.id));
         const available = pool.filter(q => !assignedIds.has(q.id));
 
         document.getElementById("poolSelect").innerHTML = available.map(q =>
             `<option value="${q.id}">#${q.id} — ${escapeHtml(q.questionText).slice(0, 80)}</option>`
-        ).join("") || `<option disabled>No more questions in category</option>`;
+        ).join("") || `<option disabled>No more active questions in category</option>`;
     }
 
     function escapeHtml(text) {

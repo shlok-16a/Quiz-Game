@@ -208,7 +208,8 @@ async function beginQuiz(quizId) {
         throw new Error(data.title || data || "Unable to start quiz");
     }
 
-    localStorage.setItem("quiz", JSON.stringify(data));
+    localStorage.setItem("quiz", JSON.stringify({ ...data, score: 0 }));
     localStorage.setItem("quizQuestionNumber", "1");
+    localStorage.setItem("quizRunningScore", "0");
     window.location.href = "quiz.html";
 }

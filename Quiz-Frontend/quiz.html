@@ -6,9 +6,14 @@
 </head>
 <body>
 
-    <div class="row" style="justify-content:space-between; align-items:center;">
+    <div id="feedbackBanner" class="quiz-feedback-banner" role="status" aria-live="polite"></div>
+
+    <div class="row quiz-topbar" style="justify-content:space-between; align-items:center;">
         <h2 id="title" style="margin:0;">Quiz</h2>
-        <button type="button" class="secondary" onclick="userLogout()">Logout</button>
+        <div class="row" style="align-items:center; gap:14px;">
+            <div id="runningScore" class="quiz-running-score" aria-live="polite">Score: 0</div>
+            <button type="button" class="secondary" onclick="userLogout()">Logout</button>
+        </div>
     </div>
     <p id="timer" class="muted"></p>
     <p id="progress"></p>
@@ -23,6 +28,13 @@
     <button type="button" id="skipBtn">Skip</button>
 
     <p id="status" style="color: green;"></p>
+
+    <div id="nextCountdownOverlay" class="modal-overlay countdown-overlay" style="display:none;" aria-live="polite">
+        <div class="countdown-card">
+            <p id="nextCountdownLabel" class="muted" style="margin:0 0 8px;">Next question loading in</p>
+            <div id="nextCountdownNumber" class="countdown-number">3</div>
+        </div>
+    </div>
 
     <script src="js/api.js"></script>
     <script>
@@ -47,6 +59,7 @@
         );
         let questionNumber = Number(localStorage.getItem("quizQuestionNumber") || "1");
         let currentQuestion = quiz.currentQuestion || quiz.firstQuestion;
+        let runningScore = Number(quiz.score ?? quiz.Score ?? localStorage.getItem("quizRunningScore") ?? 0) || 0;
         let busy = false;
         let questionTimerSeconds = defaultQuestionTimerSeconds;
         let remainingSeconds = questionTimerSeconds;
@@ -68,8 +81,28 @@
         const skipEl = document.getElementById("skipBtn");
         const progressEl = document.getElementById("progress");
         const statusEl = document.getElementById("status");
+        const bannerEl = document.getElementById("feedbackBanner");
+        const scoreEl = document.getElementById("runningScore");
+        const nextCountdownOverlay = document.getElementById("nextCountdownOverlay");
+        const nextCountdownLabel = document.getElementById("nextCountdownLabel");
+        const nextCountdownNumber = document.getElementById("nextCountdownNumber");
 
         const optionButtons = [option1El, option2El, option3El];
+
+        function updateRunningScore(score) {
+            runningScore = Number(score) || 0;
+            scoreEl.innerText = `Score: ${runningScore}`;
+            scoreEl.classList.remove("score-pop");
+            void scoreEl.offsetWidth;
+            scoreEl.classList.add("score-pop");
+
+            const saved = JSON.parse(localStorage.getItem("quiz") || "{}");
+            saved.score = runningScore;
+            localStorage.setItem("quiz", JSON.stringify(saved));
+            localStorage.setItem("quizRunningScore", String(runningScore));
+        }
+
+        updateRunningScore(runningScore);
 
         function setButtonsDisabled(disabled) {
             optionButtons.forEach(btn => { btn.disabled = disabled; });
@@ -82,15 +115,37 @@
             });
         }
 
-        function showAnswerFeedback(selectedOption, isCorrect, bonusAwarded) {
+        function hideFeedbackBanner() {
+            bannerEl.classList.remove("show", "correct", "incorrect", "neutral");
+            bannerEl.innerText = "";
+        }
+
+        function showFeedbackBanner(kind, message) {
+            bannerEl.classList.remove("correct", "incorrect", "neutral");
+            bannerEl.classList.add(kind, "show");
+            bannerEl.innerText = message;
+        }
+
+        function formatPoints(points) {
+            if (points > 0) return `+${points}`;
+            return String(points);
+        }
+
+        function showAnswerFeedback(selectedOption, isCorrect, pointsAwarded) {
             if (selectedOption < 1 || selectedOption > 3) return;
             const btn = optionButtons[selectedOption - 1];
             btn.classList.add(isCorrect ? "option-correct" : "option-wrong");
-            statusEl.style.color = isCorrect ? "#16a34a" : "#dc2626";
-            if (isCorrect && bonusAwarded > 0) {
-                statusEl.innerText = `Correct! +${bonusAwarded} bonus`;
+
+            if (isCorrect) {
+                const msg = `Hooray! Correct answer ${formatPoints(pointsAwarded)} points`;
+                showFeedbackBanner("correct", msg);
+                statusEl.style.color = "#16a34a";
+                statusEl.innerText = msg;
             } else {
-                statusEl.innerText = isCorrect ? "Correct!" : "Incorrect";
+                const msg = `Oops, wrong answer, ${formatPoints(pointsAwarded)} points`;
+                showFeedbackBanner("incorrect", msg);
+                statusEl.style.color = "#dc2626";
+                statusEl.innerText = msg;
             }
         }
 
@@ -99,12 +154,28 @@
             if (option < 1 || option > 3) return;
             clearOptionStyles();
             optionButtons[option - 1].classList.add("option-correct");
-            statusEl.style.color = "#16a34a";
+            showFeedbackBanner("neutral", "Time up — correct answer highlighted");
+            statusEl.style.color = "#4b5563";
             statusEl.innerText = "Time up — correct answer highlighted";
         }
 
         function wait(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function runInterQuestionCountdown(nextQuestionNumber, seconds = 3) {
+            nextCountdownLabel.innerText = `Question ${nextQuestionNumber} loading in`;
+            nextCountdownOverlay.style.display = "flex";
+
+            for (let n = seconds; n >= 1; n--) {
+                nextCountdownNumber.innerText = String(n);
+                nextCountdownNumber.classList.remove("countdown-pop");
+                void nextCountdownNumber.offsetWidth;
+                nextCountdownNumber.classList.add("countdown-pop");
+                await wait(1000);
+            }
+
+            nextCountdownOverlay.style.display = "none";
         }
 
         function stopQuestionTimer() {
@@ -145,6 +216,7 @@
             };
 
             clearOptionStyles();
+            hideFeedbackBanner();
             questionEl.innerText = currentQuestion.questionText;
             option1El.innerText = currentQuestion.option1;
             option2El.innerText = currentQuestion.option2;
@@ -201,25 +273,29 @@
 
                 const isCorrect = !!(data.isCorrect ?? data.IsCorrect);
                 const correctOption = Number(data.correctOption ?? data.CorrectOption ?? 0);
-                const bonusAwarded = Number(data.bonusAwarded ?? data.BonusAwarded ?? 0);
+                const pointsAwarded = Number(data.pointsAwarded ?? data.PointsAwarded ?? 0);
+                // Server is source of truth for running score
+                updateRunningScore(data.score ?? data.Score ?? runningScore);
 
                 if (selectedOption > 0) {
-                    showAnswerFeedback(selectedOption, isCorrect, bonusAwarded);
+                    showAnswerFeedback(selectedOption, isCorrect, pointsAwarded);
                     // Wrong answer: keep selected red, also show correct option in green
                     if (!isCorrect && correctOption >= 1 && correctOption <= 3) {
                         optionButtons[correctOption - 1].classList.add("option-correct");
-                        statusEl.innerText = "Incorrect — correct answer highlighted";
                     }
-                    await wait(isCorrect ? 900 : 1400);
+                    await wait(isCorrect ? 1600 : 1800);
                 } else {
                     // Timed out / skipped — reveal correct answer before moving on
                     showCorrectAnswer(correctOption);
-                    await wait(1200);
+                    await wait(1400);
                 }
+
+                hideFeedbackBanner();
 
                 if (data.quizCompleted ?? data.QuizCompleted) {
                     localStorage.setItem("resultSession", sessionId);
                     localStorage.removeItem("quizQuestionNumber");
+                    localStorage.removeItem("quizRunningScore");
                     window.location.href = "result.html";
                     return;
                 }
@@ -231,7 +307,9 @@
                     return;
                 }
 
-                questionNumber += 1;
+                const nextNumber = questionNumber + 1;
+                await runInterQuestionCountdown(nextNumber, 3);
+                questionNumber = nextNumber;
                 busy = false;
                 render(nextQuestion);
             } catch (err) {

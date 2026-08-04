@@ -172,6 +172,7 @@ public class QuizBuilderService
                 Difficulty = qq.Question.Difficulty,
                 CategoryId = qq.Question.CategoryId,
                 CategoryName = qq.Question.Category.Name,
+                IsActive = qq.Question.IsActive,
                 TimerSeconds = qq.TimerSeconds > 0
                     ? qq.TimerSeconds
                     : qq.Quiz.DurationSeconds

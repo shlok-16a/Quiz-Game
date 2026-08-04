@@ -25,6 +25,17 @@ public class AdminController : ControllerBase
     }
 
     /// <summary>
+    /// Basic reporting: plays per category/quiz, completion rate, average score, most-missed questions.
+    /// </summary>
+    [HttpGet("report")]
+    public async Task<ActionResult<DashboardReportDto>> GetReport(
+        [FromQuery] int mostMissed = 10,
+        [FromQuery] int? categoryId = null)
+    {
+        return Ok(await _adminService.GetDashboardReportAsync(mostMissed, categoryId));
+    }
+
+    /// <summary>
     /// Leaderboard for a quiz: highest score first; then shortest duration; then earlier finish time.
     /// </summary>
     [HttpGet("leaderboard/{quizId}")]

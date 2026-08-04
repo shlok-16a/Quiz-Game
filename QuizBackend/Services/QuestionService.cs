@@ -21,7 +21,8 @@ public class QuestionService
     public async Task<List<QuestionResponseDto>> GetAllAsync(
         int? categoryId = null,
         string? search = null,
-        string? difficulty = null)
+        string? difficulty = null,
+        bool? isActive = null)
     {
         var query = _context.Questions.AsQueryable();
 
@@ -31,11 +32,28 @@ public class QuestionService
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
-            query = query.Where(q => q.QuestionText.Contains(term));
+
+            if (term.All(char.IsDigit) && int.TryParse(term, out var idPrefix))
+            {
+                query = query.Where(q =>
+                    q.QuestionText.Contains(term) ||
+                    q.Id == idPrefix ||
+                    (q.Id >= idPrefix * 10 && q.Id < (idPrefix + 1) * 10) ||
+                    (q.Id >= idPrefix * 100 && q.Id < (idPrefix + 1) * 100) ||
+                    (q.Id >= idPrefix * 1000 && q.Id < (idPrefix + 1) * 1000) ||
+                    (q.Id >= idPrefix * 10000 && q.Id < (idPrefix + 1) * 10000));
+            }
+            else
+            {
+                query = query.Where(q => q.QuestionText.Contains(term));
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(difficulty))
             query = query.Where(q => q.Difficulty == difficulty);
+
+        if (isActive.HasValue)
+            query = query.Where(q => q.IsActive == isActive.Value);
 
         return await query
             .OrderByDescending(q => q.Id)
@@ -49,7 +67,8 @@ public class QuestionService
                 CorrectOption = q.CorrectOption,
                 Difficulty = q.Difficulty,
                 CategoryId = q.CategoryId,
-                CategoryName = q.Category.Name
+                CategoryName = q.Category.Name,
+                IsActive = q.IsActive
             })
             .ToListAsync();
     }
@@ -86,7 +105,8 @@ public class QuestionService
             CorrectOption = question.CorrectOption,
             Difficulty = question.Difficulty,
             CategoryId = category.Id,
-            CategoryName = category.Name
+            CategoryName = category.Name,
+            IsActive = question.IsActive
         };
     }
 
@@ -112,6 +132,18 @@ public class QuestionService
 
         await _context.SaveChangesAsync();
 
+        return true;
+    }
+
+    public async Task<bool> SetActiveAsync(int id, bool isActive)
+    {
+        var question = await _context.Questions.FindAsync(id);
+
+        if (question == null)
+            return false;
+
+        question.IsActive = isActive;
+        await _context.SaveChangesAsync();
         return true;
     }
 

@@ -20,6 +20,8 @@ public class QuestionResponseDto
 
     public string CategoryName { get; set; } = string.Empty;
 
+    public bool IsActive { get; set; } = true;
+
     /// <summary>
     /// Seconds for this question inside a quiz (0 = use quiz default).
     /// Only populated for quiz-question list endpoints.

@@ -15,3 +15,7 @@ appsettings.Development.json
 # Local database
 *.db
 .DS_Store
+
+# Uploaded cover images (keep folder via .gitkeep)
+QuizBackend/wwwroot/uploads/categories/*
+!QuizBackend/wwwroot/uploads/categories/.gitkeep

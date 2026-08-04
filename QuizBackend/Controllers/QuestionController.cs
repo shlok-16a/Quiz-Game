@@ -19,9 +19,10 @@ public class QuestionController : ControllerBase
     public async Task<ActionResult<List<QuestionResponseDto>>> Get(
         [FromQuery] int? categoryId,
         [FromQuery] string? search,
-        [FromQuery] string? difficulty)
+        [FromQuery] string? difficulty,
+        [FromQuery] bool? isActive)
     {
-        return Ok(await _questionService.GetAllAsync(categoryId, search, difficulty));
+        return Ok(await _questionService.GetAllAsync(categoryId, search, difficulty, isActive));
     }
 
     [HttpPost]
@@ -54,6 +55,13 @@ public class QuestionController : ControllerBase
         {
             return BadRequest(ex.Message);
         }
+    }
+
+    [HttpPut("{id}/active")]
+    public async Task<IActionResult> SetActive(int id, SetQuestionActiveDto dto)
+    {
+        var ok = await _questionService.SetActiveAsync(id, dto.IsActive);
+        return ok ? NoContent() : NotFound();
     }
 
     [HttpDelete("{id}")]

@@ -18,6 +18,7 @@ function userLogout() {
     localStorage.removeItem("token");
     localStorage.removeItem("quiz");
     localStorage.removeItem("quizQuestionNumber");
+    localStorage.removeItem("quizRunningScore");
     localStorage.removeItem("resultSession");
     window.location.href = "index.html";
 }

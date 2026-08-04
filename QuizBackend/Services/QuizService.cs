@@ -43,10 +43,9 @@ public class QuizService
         if (alreadyAttempted)
             throw new Exception("You have already attempted this quiz.");
 
-        // Use exactly the questions admin assigned to this quiz.
-        var pool = quiz.QuizQuestions
-            .Where(qq => qq.Question.IsActive)
-            .ToList();
+        // Use exactly the questions admin assigned to this quiz
+        // (including later-deactivated ones so existing quizzes stay intact).
+        var pool = quiz.QuizQuestions.ToList();
 
         if (!pool.Any())
             throw new Exception("This quiz has no questions.");

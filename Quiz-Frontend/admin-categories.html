@@ -34,7 +34,15 @@
             <textarea id="description"></textarea>
 
             <label>Cover Image URL</label>
-            <input id="coverImageUrl">
+            <input id="coverImageUrl" placeholder="https://... or upload below">
+
+            <label>Or upload cover image (max 2 MB)</label>
+            <input id="coverImageFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp">
+            <p id="coverImageHint" class="muted" style="margin:6px 0 0;">JPG, PNG, GIF, or WEBP · under 2 MB</p>
+            <div id="coverPreviewWrap" class="cover-preview-wrap" style="display:none;">
+                <img id="coverPreview" class="cover-preview" alt="Cover preview">
+                <button type="button" class="secondary" id="clearCoverBtn" style="margin-top:8px;">Clear image</button>
+            </div>
 
             <label>Correct Points</label>
             <input id="correctPoints" type="number" value="10">
@@ -57,6 +65,31 @@
 <script>
     requireAdmin();
     let categoriesCache = [];
+    let pendingCoverFile = null;
+    const MAX_COVER_BYTES = 2 * 1024 * 1024;
+
+    function resolveCoverUrl(url) {
+        if (!url) return "";
+        if (/^https?:\/\//i.test(url)) return url;
+        return `${API_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+    }
+
+    function showCoverPreview(url) {
+        const wrap = document.getElementById("coverPreviewWrap");
+        const img = document.getElementById("coverPreview");
+        if (!url) {
+            wrap.style.display = "none";
+            img.removeAttribute("src");
+            return;
+        }
+        img.src = resolveCoverUrl(url);
+        wrap.style.display = "block";
+    }
+
+    function clearPendingCover() {
+        pendingCoverFile = null;
+        document.getElementById("coverImageFile").value = "";
+    }
 
     function toggleForm(show, category = null) {
         document.getElementById("formCard").style.display = show ? "block" : "none";
@@ -67,6 +100,10 @@
         document.getElementById("coverImageUrl").value = category?.coverImageUrl || "";
         document.getElementById("correctPoints").value = category?.correctPoints ?? 10;
         document.getElementById("wrongPoints").value = category?.wrongPoints ?? -5;
+        clearPendingCover();
+        showCoverPreview(category?.coverImageUrl || "");
+        document.getElementById("coverImageHint").innerText = "JPG, PNG, GIF, or WEBP · under 2 MB";
+        document.getElementById("coverImageHint").className = "muted";
     }
 
     function getFormData() {
@@ -83,6 +120,34 @@
         };
     }
 
+    async function uploadCoverIfNeeded() {
+        if (!pendingCoverFile) {
+            return document.getElementById("coverImageUrl").value.trim();
+        }
+
+        if (pendingCoverFile.size > MAX_COVER_BYTES) {
+            throw new Error("Image must be smaller than 2 MB.");
+        }
+
+        const formData = new FormData();
+        formData.append("file", pendingCoverFile);
+
+        const response = await fetch(`${API_BASE_URL}/api/Category/upload-cover`, {
+            method: "POST",
+            body: formData
+        });
+
+        const text = await response.text();
+        let data = null;
+        try { data = text ? JSON.parse(text) : null; } catch { /* plain error text */ }
+
+        if (!response.ok) {
+            throw new Error((data && (data.title || data.message)) || text || "Upload failed");
+        }
+
+        return data.url || data.Url || "";
+    }
+
     async function saveCategory() {
         const data = getFormData();
         if (!data.name) {
@@ -93,6 +158,7 @@
         const id = document.getElementById("editId").value;
 
         try {
+            data.coverImageUrl = await uploadCoverIfNeeded();
             if (id) await apiSend(`/api/Category/${id}`, "PUT", data);
             else await apiSend("/api/Category", "POST", data);
             toggleForm(false);
@@ -129,20 +195,30 @@
             return;
         }
 
-        list.innerHTML = categoriesCache.map(c => `
+        list.innerHTML = categoriesCache.map(c => {
+            const cover = c.coverImageUrl
+                ? `<img class="cover-thumb" src="${escapeHtml(resolveCoverUrl(c.coverImageUrl))}" alt="">`
+                : `<div class="cover-thumb cover-thumb-empty muted">No cover</div>`;
+
+            return `
             <div class="card">
-                <h3>${escapeHtml(c.name)}</h3>
-                <p class="muted">${escapeHtml(c.description || "No description")}</p>
-                <p>Question Count : ${c.questionCount}</p>
-                <p>Timer : ${c.questionTimerSeconds} sec</p>
-                <p>+${c.correctPoints} / ${c.wrongPoints}</p>
-                <p>Status : ${c.isActive ? "Active" : "Inactive"}</p>
-                <div class="row">
-                    <button class="secondary" onclick="editCategory(${c.id})">Edit</button>
-                    <button class="danger" onclick="deleteCategory(${c.id}, '${String(c.name).replace(/'/g, "\\'")}')">Delete</button>
+                <div class="row" style="align-items:flex-start; gap:14px;">
+                    ${cover}
+                    <div style="flex:1; min-width:0;">
+                        <h3 style="margin-top:0;">${escapeHtml(c.name)}</h3>
+                        <p class="muted">${escapeHtml(c.description || "No description")}</p>
+                        <p>Question Count : ${c.questionCount}</p>
+                        <p>Timer : ${c.questionTimerSeconds} sec</p>
+                        <p>+${c.correctPoints} / ${c.wrongPoints}</p>
+                        <p>Status : ${c.isActive ? "Active" : "Inactive"}</p>
+                        <div class="row">
+                            <button class="secondary" onclick="editCategory(${c.id})">Edit</button>
+                            <button class="danger" onclick="deleteCategory(${c.id}, '${String(c.name).replace(/'/g, "\\'")}')">Delete</button>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        `).join("");
+            </div>`;
+        }).join("");
     }
 
     function editCategory(id) {
@@ -151,6 +227,53 @@
         toggleForm(true, category);
         window.scrollTo({ top: 0, behavior: "smooth" });
     }
+
+    document.getElementById("coverImageFile").onchange = (e) => {
+        const file = e.target.files?.[0] || null;
+        const hint = document.getElementById("coverImageHint");
+
+        if (!file) {
+            pendingCoverFile = null;
+            hint.innerText = "JPG, PNG, GIF, or WEBP · under 2 MB";
+            hint.className = "muted";
+            showCoverPreview(document.getElementById("coverImageUrl").value.trim());
+            return;
+        }
+
+        if (file.size > MAX_COVER_BYTES) {
+            pendingCoverFile = null;
+            e.target.value = "";
+            hint.innerText = "File is larger than 2 MB. Please choose a smaller image.";
+            hint.className = "err";
+            return;
+        }
+
+        if (!file.type.startsWith("image/")) {
+            pendingCoverFile = null;
+            e.target.value = "";
+            hint.innerText = "Please select an image file.";
+            hint.className = "err";
+            return;
+        }
+
+        pendingCoverFile = file;
+        hint.innerText = `${file.name} · ${(file.size / 1024).toFixed(0)} KB (will upload on Save)`;
+        hint.className = "ok";
+        showCoverPreview(URL.createObjectURL(file));
+    };
+
+    document.getElementById("clearCoverBtn").onclick = () => {
+        clearPendingCover();
+        document.getElementById("coverImageUrl").value = "";
+        showCoverPreview("");
+        document.getElementById("coverImageHint").innerText = "JPG, PNG, GIF, or WEBP · under 2 MB";
+        document.getElementById("coverImageHint").className = "muted";
+    };
+
+    document.getElementById("coverImageUrl").oninput = (e) => {
+        if (pendingCoverFile) return;
+        showCoverPreview(e.target.value.trim());
+    };
 
     loadCategories().catch(err => alert(err.message));
 </script>

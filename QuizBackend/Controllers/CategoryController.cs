@@ -9,10 +9,12 @@ namespace QuizBackend.Controllers;
 public class CategoryController : ControllerBase
 {
     private readonly CategoryService _categoryService;
+    private readonly CoverImageService _coverImageService;
 
-    public CategoryController(CategoryService categoryService)
+    public CategoryController(CategoryService categoryService, CoverImageService coverImageService)
     {
         _categoryService = categoryService;
+        _coverImageService = coverImageService;
     }
 
     [HttpGet]
@@ -60,5 +62,22 @@ public class CategoryController : ControllerBase
             return NotFound($"Category with ID {id} not found.");
 
         return NoContent();
+    }
+
+    [HttpPost("upload-cover")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(CoverImageService.MaxBytes + 512_000)]
+    public async Task<ActionResult<UploadCoverImageResultDto>> UploadCover(
+        [FromForm] UploadCoverImageFormDto form)
+    {
+        try
+        {
+            var result = await _coverImageService.SaveAsync(form.File);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 }
