@@ -63,13 +63,18 @@
                 <input id="defaultQuestionTimerSeconds" type="number" value="10" min="1">
             </div>
 
-            <label>Bonus time threshold (%)</label>
-            <input id="bonusTimePercent" type="number" value="0" min="0" max="100">
-            <p class="muted">Correct answer within this % of that question’s timer earns bonus. 0 = disabled. Example: 50 on a 10s question = within first 5s.</p>
+            <div id="thresholdBonusFields" style="display:none;">
+                <label>Bonus time threshold (%)</label>
+                <input id="bonusTimePercent" type="number" value="0" min="0" max="100">
+                <p class="muted">Correct answer within this % of that question’s timer earns bonus. 0 = disabled. Example: 50 on a 10s question = within first 5s.</p>
 
-            <label>Bonus points</label>
-            <input id="bonusPoints" type="number" value="0" min="0">
-            <p class="muted">Added on top of correct points when the bonus threshold is met.</p>
+                <label>Bonus points</label>
+                <input id="bonusPoints" type="number" value="0" min="0">
+                <p class="muted">Added on top of correct points when the bonus threshold is met.</p>
+            </div>
+            <p id="remainingTimeBonusHint" class="muted">
+                Speed bonus: remaining seconds on each correct answer are added as bonus points (e.g. answer in 2s of 10s → +8).
+            </p>
 
             <label>Active From (IST)</label>
             <input id="startDate" type="datetime-local">
@@ -122,6 +127,8 @@
         document.getElementById("globalTimerFields").style.display = perQuestion ? "none" : "block";
         document.getElementById("perQuestionTimerHint").style.display = perQuestion ? "block" : "none";
         document.getElementById("defaultTimerFields").style.display = perQuestion ? "block" : "none";
+        document.getElementById("thresholdBonusFields").style.display = perQuestion ? "block" : "none";
+        document.getElementById("remainingTimeBonusHint").style.display = perQuestion ? "none" : "block";
         if (perQuestion) {
             document.getElementById("defaultQuestionTimerSeconds").value =
                 document.getElementById("questionTimerSeconds").value || 10;
@@ -177,8 +184,12 @@
             questionCount: Number(document.getElementById("questionCount").value),
             durationSeconds,
             usePerQuestionTimer,
-            bonusTimePercent: Number(document.getElementById("bonusTimePercent").value) || 0,
-            bonusPoints: Number(document.getElementById("bonusPoints").value) || 0,
+            bonusTimePercent: usePerQuestionTimer
+                ? (Number(document.getElementById("bonusTimePercent").value) || 0)
+                : 0,
+            bonusPoints: usePerQuestionTimer
+                ? (Number(document.getElementById("bonusPoints").value) || 0)
+                : 0,
             isActive: document.getElementById("isActive").checked,
             startDate: istLocalToIso(startDate),
             endDate: istLocalToIso(endDate)
@@ -252,9 +263,11 @@
                 <p>Category: <strong>${q.categoryName}</strong></p>
                 <p>Questions: ${q.assignedQuestions} / ${q.questionCount}</p>
                 <p>Timer: ${formatQuestionTimer(q)}</p>
-                ${Number(q.bonusTimePercent) > 0 && Number(q.bonusPoints) > 0
-                    ? `<p>Bonus: +${q.bonusPoints} if correct within ${q.bonusTimePercent}% of question time</p>`
-                    : ""}
+                ${q.usePerQuestionTimer
+                    ? (Number(q.bonusTimePercent) > 0 && Number(q.bonusPoints) > 0
+                        ? `<p>Bonus: +${q.bonusPoints} if correct within ${q.bonusTimePercent}% of question time</p>`
+                        : "")
+                    : `<p>Bonus: remaining seconds on each correct answer</p>`}
                 <p>Active From: ${formatIst(q.startDate)}</p>
                 <p>Active Until: ${formatIst(q.endDate)}</p>
                 <p>Status: ${status}</p>

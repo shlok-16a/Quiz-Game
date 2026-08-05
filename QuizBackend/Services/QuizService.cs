@@ -175,7 +175,7 @@ public class QuizService
             {
                 points = category.CorrectPoints;
 
-                if (quiz != null && quiz.BonusPoints > 0 && quiz.BonusTimePercent > 0)
+                if (quiz != null)
                 {
                     var defaultSeconds = quiz.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
                     var link = quiz.QuizQuestions.FirstOrDefault(qq => qq.QuestionId == question.Id);
@@ -183,11 +183,23 @@ public class QuizService
                         ? ResolveQuestionTimer(quiz, link, defaultSeconds)
                         : defaultSeconds;
 
-                    // Bonus if answered within the first BonusTimePercent of this question's timer.
-                    var bonusWindowSeconds = questionTimer * quiz.BonusTimePercent / 100.0;
-                    if (timeTaken <= bonusWindowSeconds)
+                    if (quiz.UsePerQuestionTimer)
                     {
-                        bonusAwarded = quiz.BonusPoints;
+                        // Flat bonus when answered within the first BonusTimePercent of this question's timer.
+                        if (quiz.BonusPoints > 0 && quiz.BonusTimePercent > 0)
+                        {
+                            var bonusWindowSeconds = questionTimer * quiz.BonusTimePercent / 100.0;
+                            if (timeTaken <= bonusWindowSeconds)
+                            {
+                                bonusAwarded = quiz.BonusPoints;
+                                points += bonusAwarded;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Global timer: remaining seconds on a correct answer are the bonus (time = bonus).
+                        bonusAwarded = Math.Max(0, questionTimer - timeTaken);
                         points += bonusAwarded;
                     }
                 }

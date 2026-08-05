@@ -131,13 +131,18 @@
             return String(points);
         }
 
-        function showAnswerFeedback(selectedOption, isCorrect, pointsAwarded) {
+        function showAnswerFeedback(selectedOption, isCorrect, pointsAwarded, bonusAwarded = 0) {
             if (selectedOption < 1 || selectedOption > 3) return;
             const btn = optionButtons[selectedOption - 1];
             btn.classList.add(isCorrect ? "option-correct" : "option-wrong");
 
             if (isCorrect) {
-                const msg = `Hooray! Correct answer ${formatPoints(pointsAwarded)} points`;
+                const bonus = Math.max(0, Number(bonusAwarded) || 0);
+                const basePoints = pointsAwarded - bonus;
+                let msg = `Hooray! Correct answer ${formatPoints(basePoints)} points`;
+                if (bonus > 0) {
+                    msg += ` ${formatPoints(bonus)} bonus`;
+                }
                 showFeedbackBanner("correct", msg);
                 statusEl.style.color = "#16a34a";
                 statusEl.innerText = msg;
@@ -274,11 +279,12 @@
                 const isCorrect = !!(data.isCorrect ?? data.IsCorrect);
                 const correctOption = Number(data.correctOption ?? data.CorrectOption ?? 0);
                 const pointsAwarded = Number(data.pointsAwarded ?? data.PointsAwarded ?? 0);
+                const bonusAwarded = Number(data.bonusAwarded ?? data.BonusAwarded ?? 0);
                 // Server is source of truth for running score
                 updateRunningScore(data.score ?? data.Score ?? runningScore);
 
                 if (selectedOption > 0) {
-                    showAnswerFeedback(selectedOption, isCorrect, pointsAwarded);
+                    showAnswerFeedback(selectedOption, isCorrect, pointsAwarded, bonusAwarded);
                     // Wrong answer: keep selected red, also show correct option in green
                     if (!isCorrect && correctOption >= 1 && correctOption <= 3) {
                         optionButtons[correctOption - 1].classList.add("option-correct");

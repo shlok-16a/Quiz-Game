@@ -26,13 +26,18 @@ public class Quiz
     public bool UsePerQuestionTimer { get; set; } = false;
 
     /// <summary>
-    /// Answer correctly within this percent of the question timer to earn bonus
-    /// (e.g. 40 on a 10s question = within first 4 seconds).
-    /// 0 disables bonus.
+    /// Used only when <see cref="UsePerQuestionTimer"/> is true.
+    /// Answer correctly within this percent of the question timer to earn
+    /// <see cref="BonusPoints"/> (e.g. 40 on a 10s question = within first 4 seconds).
+    /// 0 disables the threshold bonus.
+    /// When <see cref="UsePerQuestionTimer"/> is false, bonus is remaining seconds instead.
     /// </summary>
     public int BonusTimePercent { get; set; } = 0;
 
-    /// <summary>Extra points added on top of correct points when bonus is earned.</summary>
+    /// <summary>
+    /// Flat extra points when the per-question threshold bonus is earned.
+    /// Ignored when using the global (same-for-all) timer — that mode awards remaining seconds.
+    /// </summary>
     public int BonusPoints { get; set; } = 0;
 
     public bool IsActive { get; set; } = false;

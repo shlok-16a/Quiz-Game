@@ -50,12 +50,17 @@
                 <p class="muted">New questions start with this value. Edit each row below to customize.</p>
             </div>
 
-            <label>Bonus time threshold (%)</label>
-            <input id="bonusTimePercent" type="number" min="0" max="100" value="0">
-            <p class="muted">Correct within this % of each question’s own timer earns bonus. 0 = off.</p>
+            <div id="thresholdBonusFields" style="display:none;">
+                <label>Bonus time threshold (%)</label>
+                <input id="bonusTimePercent" type="number" min="0" max="100" value="0">
+                <p class="muted">Correct within this % of each question’s own timer earns bonus. 0 = off.</p>
 
-            <label>Bonus points</label>
-            <input id="bonusPoints" type="number" min="0" value="0">
+                <label>Bonus points</label>
+                <input id="bonusPoints" type="number" min="0" value="0">
+            </div>
+            <p id="remainingTimeBonusHint" class="muted">
+                Speed bonus: remaining seconds on each correct answer are added as bonus points (e.g. answer in 2s of 10s → +8).
+            </p>
 
             <label>Active From (IST)</label>
             <input id="startDate" type="datetime-local">
@@ -155,6 +160,8 @@
         const perQuestion = document.getElementById("timerMode").value === "perQuestion";
         document.getElementById("globalTimerFields").style.display = perQuestion ? "none" : "block";
         document.getElementById("defaultTimerFields").style.display = perQuestion ? "block" : "none";
+        document.getElementById("thresholdBonusFields").style.display = perQuestion ? "block" : "none";
+        document.getElementById("remainingTimeBonusHint").style.display = perQuestion ? "none" : "block";
     }
 
     async function loadQuiz() {
@@ -203,8 +210,12 @@
             questionCount: Number(document.getElementById("questionCount").value),
             durationSeconds,
             usePerQuestionTimer,
-            bonusTimePercent: Number(document.getElementById("bonusTimePercent").value) || 0,
-            bonusPoints: Number(document.getElementById("bonusPoints").value) || 0,
+            bonusTimePercent: usePerQuestionTimer
+                ? (Number(document.getElementById("bonusTimePercent").value) || 0)
+                : 0,
+            bonusPoints: usePerQuestionTimer
+                ? (Number(document.getElementById("bonusPoints").value) || 0)
+                : 0,
             isActive: document.getElementById("isActive").checked,
             startDate: istLocalToIso(startDate),
             endDate: istLocalToIso(endDate)
