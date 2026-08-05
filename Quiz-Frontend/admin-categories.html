@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Admin Categories</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -38,7 +39,7 @@
 
             <label>Or upload cover image (max 2 MB)</label>
             <input id="coverImageFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp">
-            <p id="coverImageHint" class="muted" style="margin:6px 0 0;">JPG, PNG, GIF, or WEBP · under 2 MB</p>
+            <p id="coverImageHint" class="muted" style="margin:6px 0 0;">JPG, PNG, GIF, or WEBP - under 2 MB</p>
             <div id="coverPreviewWrap" class="cover-preview-wrap" style="display:none;">
                 <img id="coverPreview" class="cover-preview" alt="Cover preview">
                 <button type="button" class="secondary" id="clearCoverBtn" style="margin-top:8px;">Clear image</button>
@@ -102,7 +103,7 @@
         document.getElementById("wrongPoints").value = category?.wrongPoints ?? -5;
         clearPendingCover();
         showCoverPreview(category?.coverImageUrl || "");
-        document.getElementById("coverImageHint").innerText = "JPG, PNG, GIF, or WEBP · under 2 MB";
+        document.getElementById("coverImageHint").innerText = "JPG, PNG, GIF, or WEBP - under 2 MB";
         document.getElementById("coverImageHint").className = "muted";
     }
 
@@ -234,7 +235,7 @@
 
         if (!file) {
             pendingCoverFile = null;
-            hint.innerText = "JPG, PNG, GIF, or WEBP · under 2 MB";
+            hint.innerText = "JPG, PNG, GIF, or WEBP - under 2 MB";
             hint.className = "muted";
             showCoverPreview(document.getElementById("coverImageUrl").value.trim());
             return;
@@ -257,7 +258,7 @@
         }
 
         pendingCoverFile = file;
-        hint.innerText = `${file.name} · ${(file.size / 1024).toFixed(0)} KB (will upload on Save)`;
+        hint.innerText = `${file.name} - ${(file.size / 1024).toFixed(0)} KB (will upload on Save)`;
         hint.className = "ok";
         showCoverPreview(URL.createObjectURL(file));
     };
@@ -266,7 +267,7 @@
         clearPendingCover();
         document.getElementById("coverImageUrl").value = "";
         showCoverPreview("");
-        document.getElementById("coverImageHint").innerText = "JPG, PNG, GIF, or WEBP · under 2 MB";
+        document.getElementById("coverImageHint").innerText = "JPG, PNG, GIF, or WEBP - under 2 MB";
         document.getElementById("coverImageHint").className = "muted";
     };
 

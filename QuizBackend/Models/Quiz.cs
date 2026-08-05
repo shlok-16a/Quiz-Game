@@ -13,31 +13,25 @@ public class Quiz
     /// <summary>Rules shown to players for this quiz.</summary>
     public string RulesText { get; set; } = string.Empty;
 
-    /// <summary>Target number of questions for this quiz.</summary>
+    /// <summary>Target number of questions for this quiz (per user).</summary>
     public int QuestionCount { get; set; } = 10;
+
+    /// <summary>
+    /// Difficulty filter for play-time question selection from the category bank.
+    /// Easy / Medium / Hard / Mixed (any difficulty).
+    /// </summary>
+    public string Difficulty { get; set; } = "Mixed";
 
     /// <summary>Default time allowed for each question (seconds).</summary>
     public int DurationSeconds { get; set; } = 10;
 
-    /// <summary>
-    /// When true, each quiz question uses its own <see cref="QuizQuestion.TimerSeconds"/>.
-    /// When false, every question uses <see cref="DurationSeconds"/>.
-    /// </summary>
+    /// <summary>Legacy column; always false. Kept for existing database schema.</summary>
     public bool UsePerQuestionTimer { get; set; } = false;
 
-    /// <summary>
-    /// Used only when <see cref="UsePerQuestionTimer"/> is true.
-    /// Answer correctly within this percent of the question timer to earn
-    /// <see cref="BonusPoints"/> (e.g. 40 on a 10s question = within first 4 seconds).
-    /// 0 disables the threshold bonus.
-    /// When <see cref="UsePerQuestionTimer"/> is false, bonus is remaining seconds instead.
-    /// </summary>
+    /// <summary>Legacy column; unused. Kept for existing database schema.</summary>
     public int BonusTimePercent { get; set; } = 0;
 
-    /// <summary>
-    /// Flat extra points when the per-question threshold bonus is earned.
-    /// Ignored when using the global (same-for-all) timer — that mode awards remaining seconds.
-    /// </summary>
+    /// <summary>Legacy column; unused. Kept for existing database schema.</summary>
     public int BonusPoints { get; set; } = 0;
 
     public bool IsActive { get; set; } = false;

@@ -21,7 +21,6 @@ public class QuizService
         var quiz = await _context.Quizzes
             .Include(q => q.Category)
             .Include(q => q.QuizQuestions)
-            .ThenInclude(qq => qq.Question)
             .FirstOrDefaultAsync(q => q.Id == dto.QuizId);
 
         if (quiz == null)
@@ -43,22 +42,10 @@ public class QuizService
         if (alreadyAttempted)
             throw new Exception("You have already attempted this quiz.");
 
-        // Use exactly the questions admin assigned to this quiz
-        // (including later-deactivated ones so existing quizzes stay intact).
-        var pool = quiz.QuizQuestions.ToList();
+        var selectedQuestions = await SelectQuestionsForUserAsync(userId, quiz);
 
-        if (!pool.Any())
-            throw new Exception("This quiz has no questions.");
-
-        var takeCount = quiz.QuestionCount > 0
-            ? Math.Min(quiz.QuestionCount, pool.Count)
-            : pool.Count;
-
-        // Shuffle question order for this user session (independent of admin order).
-        var selectedLinks = pool
-            .OrderBy(_ => Guid.NewGuid())
-            .Take(takeCount)
-            .ToList();
+        if (!selectedQuestions.Any())
+            throw new Exception("No questions available for this quiz.");
 
         var session = new QuizSession
         {
@@ -76,12 +63,12 @@ public class QuizService
 
         var sessionQuestions = new List<QuizSessionQuestion>();
         int order = 1;
-        foreach (var link in selectedLinks)
+        foreach (var question in selectedQuestions)
         {
             var sessionQuestion = new QuizSessionQuestion
             {
                 QuizSessionId = session.Id,
-                QuestionId = link.QuestionId,
+                QuestionId = question.Id,
                 QuestionOrder = order++,
                 OptionOrder = CreateShuffledOptionOrder()
             };
@@ -90,22 +77,101 @@ public class QuizService
             _context.QuizSessionQuestions.Add(sessionQuestion);
         }
 
+        // Mark selected questions as seen for this user immediately.
+        await MarkQuestionsSeenAsync(userId, quiz.CategoryId, selectedQuestions);
+
         await _context.SaveChangesAsync();
 
         var firstSessionQuestion = sessionQuestions.First();
-        var firstLink = selectedLinks.First();
+        var firstQuestion = selectedQuestions.First();
         var defaultSeconds = quiz.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
-        var firstTimer = ResolveQuestionTimer(quiz, firstLink, defaultSeconds);
+        var firstLink = quiz.QuizQuestions.FirstOrDefault(qq => qq.QuestionId == firstQuestion.Id);
+        var firstTimer = firstLink != null
+            ? ResolveQuestionTimer(quiz, firstLink, defaultSeconds)
+            : defaultSeconds;
 
         return new StartQuizResponseDto
         {
             SessionId = session.Id,
-            TotalQuestions = selectedLinks.Count,
+            TotalQuestions = selectedQuestions.Count,
             QuestionTimerSeconds = firstTimer,
             DurationSeconds = firstTimer,
             Title = quiz.Title,
-            FirstQuestion = ToPlayQuestion(firstLink.Question, firstSessionQuestion.OptionOrder, firstTimer)
+            FirstQuestion = ToPlayQuestion(firstQuestion, firstSessionQuestion.OptionOrder, firstTimer)
         };
+    }
+
+    /// <summary>
+    /// Draw questions from the category bank at start time:
+    /// prefer unseen for this user, fill with seen if needed, then shuffle.
+    /// </summary>
+    private async Task<List<Question>> SelectQuestionsForUserAsync(int userId, Quiz quiz)
+    {
+        var difficulty = QuizBuilderService.NormalizeDifficulty(quiz.Difficulty);
+
+        var bankQuery = _context.Questions
+            .Where(q => q.CategoryId == quiz.CategoryId && q.IsActive);
+
+        if (!string.Equals(difficulty, "Mixed", StringComparison.OrdinalIgnoreCase))
+        {
+            var lower = difficulty.ToLowerInvariant();
+            bankQuery = bankQuery.Where(q => q.Difficulty.ToLower() == lower);
+        }
+
+        var bank = await bankQuery.ToListAsync();
+        if (!bank.Any())
+            return new List<Question>();
+
+        var seenIds = (await _context.SeenQuestions
+            .Where(s => s.UserId == userId && s.CategoryId == quiz.CategoryId)
+            .Select(s => s.QuestionId)
+            .ToListAsync()).ToHashSet();
+
+        var unseen = bank.Where(q => !seenIds.Contains(q.Id)).OrderBy(_ => Guid.NewGuid()).ToList();
+        var seen = bank.Where(q => seenIds.Contains(q.Id)).OrderBy(_ => Guid.NewGuid()).ToList();
+
+        var takeCount = quiz.QuestionCount > 0
+            ? Math.Min(quiz.QuestionCount, bank.Count)
+            : bank.Count;
+
+        List<Question> selected;
+        if (unseen.Count >= takeCount)
+        {
+            selected = unseen.Take(takeCount).ToList();
+        }
+        else
+        {
+            // Exhaust unseen first, then fill remaining slots from previously seen.
+            var remaining = takeCount - unseen.Count;
+            selected = unseen.Concat(seen.Take(remaining)).ToList();
+        }
+
+        // Final shuffle of question order for this session.
+        return selected.OrderBy(_ => Guid.NewGuid()).ToList();
+    }
+
+    private async Task MarkQuestionsSeenAsync(int userId, int categoryId, List<Question> questions)
+    {
+        var questionIds = questions.Select(q => q.Id).ToList();
+        var alreadySeen = (await _context.SeenQuestions
+            .Where(s => s.UserId == userId && questionIds.Contains(s.QuestionId))
+            .Select(s => s.QuestionId)
+            .ToListAsync()).ToHashSet();
+
+        var now = DateTime.UtcNow;
+        foreach (var question in questions)
+        {
+            if (alreadySeen.Contains(question.Id))
+                continue;
+
+            _context.SeenQuestions.Add(new SeenQuestion
+            {
+                UserId = userId,
+                CategoryId = categoryId,
+                QuestionId = question.Id,
+                SeenAt = now
+            });
+        }
     }
 
     public async Task<SubmitAnswerResponseDto> SubmitAnswerAsync(
@@ -177,31 +243,10 @@ public class QuizService
 
                 if (quiz != null)
                 {
-                    var defaultSeconds = quiz.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
-                    var link = quiz.QuizQuestions.FirstOrDefault(qq => qq.QuestionId == question.Id);
-                    var questionTimer = link != null
-                        ? ResolveQuestionTimer(quiz, link, defaultSeconds)
-                        : defaultSeconds;
-
-                    if (quiz.UsePerQuestionTimer)
-                    {
-                        // Flat bonus when answered within the first BonusTimePercent of this question's timer.
-                        if (quiz.BonusPoints > 0 && quiz.BonusTimePercent > 0)
-                        {
-                            var bonusWindowSeconds = questionTimer * quiz.BonusTimePercent / 100.0;
-                            if (timeTaken <= bonusWindowSeconds)
-                            {
-                                bonusAwarded = quiz.BonusPoints;
-                                points += bonusAwarded;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Global timer: remaining seconds on a correct answer are the bonus (time = bonus).
-                        bonusAwarded = Math.Max(0, questionTimer - timeTaken);
-                        points += bonusAwarded;
-                    }
+                    var questionTimer = quiz.DurationSeconds > 0 ? quiz.DurationSeconds : 10;
+                    // Remaining seconds on a correct answer are the bonus (time = bonus).
+                    bonusAwarded = Math.Max(0, questionTimer - timeTaken);
+                    points += bonusAwarded;
                 }
             }
             else
@@ -347,12 +392,7 @@ public class QuizService
     }
 
     private static int ResolveQuestionTimer(Quiz quiz, QuizQuestion link, int defaultSeconds)
-    {
-        if (quiz.UsePerQuestionTimer && link.TimerSeconds > 0)
-            return link.TimerSeconds;
-
-        return defaultSeconds > 0 ? defaultSeconds : 10;
-    }
+        => defaultSeconds > 0 ? defaultSeconds : 10;
 
     /// <summary>Random display order of original options, e.g. "3,1,2".</summary>
     private static string CreateShuffledOptionOrder()

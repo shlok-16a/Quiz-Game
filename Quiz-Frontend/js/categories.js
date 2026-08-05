@@ -50,7 +50,8 @@ async function loadQuizzes() {
             <div class="card">
                 <h3>${escapeHtml(quiz.title)}</h3>
                 <p>Category: ${escapeHtml(quiz.categoryName)}</p>
-                <p>Questions: ${quiz.assignedQuestions}</p>
+                <p>Questions: ${quiz.questionCount}</p>
+                <p>Difficulty: ${escapeHtml(quiz.difficulty || "Mixed")}</p>
                 <p>Timer: ${timerSec} sec / question</p>
                 ${from ? `<p class="muted">Available from: ${from}</p>` : ""}
                 ${until ? `<p class="muted">Available until: ${until}</p>` : ""}
@@ -64,7 +65,7 @@ async function loadQuizzes() {
 function formatQuizIst(iso) {
     if (!iso) return null;
     const text = formatIst(iso);
-    return text === "—" ? null : text;
+    return text === "-" ? null : text;
 }
 
 function escapeHtml(text) {
@@ -93,7 +94,7 @@ function openStartModal(quizId) {
         1,
         Number(quiz.questionTimerSeconds ?? quiz.durationSeconds) || 10
     );
-    const totalQuestions = quiz.assignedQuestions || quiz.questionCount || 0;
+    const totalQuestions = quiz.questionCount || 0;
     const rules = (quiz.rulesText || "").trim();
 
     document.getElementById("modalTitle").innerText = quiz.title || "Quiz";
@@ -102,22 +103,10 @@ function openStartModal(quizId) {
     document.getElementById("modalWrong").innerText = String(quiz.wrongPoints ?? 0);
     document.getElementById("modalTimer").innerText = String(timerSec);
 
-    const bonusPercent = Number(quiz.bonusTimePercent) || 0;
-    const bonusPoints = Number(quiz.bonusPoints) || 0;
     const bonusRow = document.getElementById("modalBonusRow");
-    if (quiz.usePerQuestionTimer) {
-        if (bonusPercent > 0 && bonusPoints > 0) {
-            document.getElementById("modalBonus").innerText =
-                `+${bonusPoints} if correct within first ${bonusPercent}% of each question’s time`;
-            bonusRow.style.display = "block";
-        } else {
-            bonusRow.style.display = "none";
-        }
-    } else {
-        document.getElementById("modalBonus").innerText =
-            "Remaining seconds on each correct answer are added as bonus points";
-        bonusRow.style.display = "block";
-    }
+    document.getElementById("modalBonus").innerText =
+        "Remaining seconds on each correct answer are added as bonus points";
+    bonusRow.style.display = "block";
 
     const rulesBlock = document.getElementById("modalRulesBlock");
     const rulesEl = document.getElementById("modalRules");

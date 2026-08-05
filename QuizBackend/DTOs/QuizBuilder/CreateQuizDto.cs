@@ -10,16 +10,11 @@ public class CreateQuizDto
 
     public int QuestionCount { get; set; } = 10;
 
+    /// <summary>Easy / Medium / Hard / Mixed.</summary>
+    public string Difficulty { get; set; } = "Mixed";
+
     /// <summary>Default seconds allotted to each question.</summary>
     public int DurationSeconds { get; set; } = 10;
-
-    /// <summary>When true, each assigned question can have its own timer.</summary>
-    public bool UsePerQuestionTimer { get; set; } = false;
-
-    /// <summary>Percent of question time within which a correct answer earns bonus. 0 = off.</summary>
-    public int BonusTimePercent { get; set; } = 0;
-
-    public int BonusPoints { get; set; } = 0;
 
     public bool IsActive { get; set; } = false;
 

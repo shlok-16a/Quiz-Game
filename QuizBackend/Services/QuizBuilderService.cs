@@ -34,12 +34,13 @@ public class QuizBuilderService
     {
         var now = DateTime.UtcNow;
 
+        // Active quizzes in schedule window. Questions are drawn from the
+        // category bank at start time — no pre-assigned QuizQuestions required.
         var quizzes = await _context.Quizzes
             .Include(q => q.Category)
             .Include(q => q.QuizQuestions)
             .Where(q =>
                 q.IsActive &&
-                q.QuizQuestions.Any() &&
                 (q.StartDate == null || q.StartDate <= now) &&
                 (q.EndDate == null || q.EndDate >= now))
             .OrderByDescending(q => q.Id)
@@ -81,16 +82,27 @@ public class QuizBuilderService
 
         ValidateSchedule(dto.StartDate, dto.EndDate);
 
+        var difficulty = NormalizeDifficulty(dto.Difficulty);
+
+        if (dto.IsActive)
+        {
+            var bankCount = await CountBankQuestionsAsync(dto.CategoryId, difficulty);
+            if (bankCount == 0)
+                throw new Exception(
+                    "Cannot activate: no active questions in the category bank for this difficulty. Upload questions via CSV first.");
+        }
+
         var quiz = new Quiz
         {
             Title = string.IsNullOrWhiteSpace(dto.Title) ? $"{category.Name} Quiz" : dto.Title.Trim(),
             CategoryId = dto.CategoryId,
             RulesText = dto.RulesText?.Trim() ?? string.Empty,
             QuestionCount = dto.QuestionCount <= 0 ? 10 : dto.QuestionCount,
+            Difficulty = difficulty,
             DurationSeconds = dto.DurationSeconds <= 0 ? 10 : dto.DurationSeconds,
-            UsePerQuestionTimer = dto.UsePerQuestionTimer,
-            BonusTimePercent = ClampBonusPercent(dto.BonusTimePercent),
-            BonusPoints = Math.Max(0, dto.BonusPoints),
+            UsePerQuestionTimer = false,
+            BonusTimePercent = 0,
+            BonusPoints = 0,
             IsActive = dto.IsActive,
             StartDate = ToUtc(dto.StartDate),
             EndDate = ToUtc(dto.EndDate)
@@ -109,13 +121,24 @@ public class QuizBuilderService
 
         ValidateSchedule(dto.StartDate, dto.EndDate);
 
+        var difficulty = NormalizeDifficulty(dto.Difficulty);
+
+        if (dto.IsActive)
+        {
+            var bankCount = await CountBankQuestionsAsync(quiz.CategoryId, difficulty);
+            if (bankCount == 0)
+                throw new Exception(
+                    "Cannot activate: no active questions in the category bank for this difficulty. Upload questions via CSV first.");
+        }
+
         quiz.Title = dto.Title.Trim();
         quiz.RulesText = dto.RulesText?.Trim() ?? string.Empty;
         quiz.QuestionCount = dto.QuestionCount;
+        quiz.Difficulty = difficulty;
         quiz.DurationSeconds = dto.DurationSeconds <= 0 ? 10 : dto.DurationSeconds;
-        quiz.UsePerQuestionTimer = dto.UsePerQuestionTimer;
-        quiz.BonusTimePercent = ClampBonusPercent(dto.BonusTimePercent);
-        quiz.BonusPoints = Math.Max(0, dto.BonusPoints);
+        quiz.UsePerQuestionTimer = false;
+        quiz.BonusTimePercent = 0;
+        quiz.BonusPoints = 0;
         quiz.IsActive = dto.IsActive;
         quiz.StartDate = ToUtc(dto.StartDate);
         quiz.EndDate = ToUtc(dto.EndDate);
@@ -127,13 +150,17 @@ public class QuizBuilderService
     public async Task<bool> SetActiveAsync(int id, bool isActive)
     {
         var quiz = await _context.Quizzes
-            .Include(q => q.QuizQuestions)
             .FirstOrDefaultAsync(q => q.Id == id);
 
         if (quiz == null) return false;
 
-        if (isActive && !quiz.QuizQuestions.Any())
-            throw new Exception("Cannot activate a quiz with no questions.");
+        if (isActive)
+        {
+            var bankCount = await CountBankQuestionsAsync(quiz.CategoryId, quiz.Difficulty);
+            if (bankCount == 0)
+                throw new Exception(
+                    "Cannot activate: no active questions in the category bank for this difficulty. Upload questions via CSV first.");
+        }
 
         quiz.IsActive = isActive;
         await _context.SaveChangesAsync();
@@ -195,8 +222,6 @@ public class QuizBuilderService
             ?? throw new Exception("Question not found in this quiz.");
 
         link.TimerSeconds = timerSeconds;
-        // Saving a per-question timer implies this quiz uses per-question mode.
-        quiz.UsePerQuestionTimer = true;
         await _context.SaveChangesAsync();
     }
 
@@ -384,14 +409,41 @@ public class QuizBuilderService
         return result;
     }
 
+    private async Task<int> CountBankQuestionsAsync(int categoryId, string difficulty)
+    {
+        var query = _context.Questions
+            .Where(q => q.CategoryId == categoryId && q.IsActive);
+
+        var normalized = NormalizeDifficulty(difficulty);
+        if (!string.Equals(normalized, "Mixed", StringComparison.OrdinalIgnoreCase))
+        {
+            var lower = normalized.ToLowerInvariant();
+            query = query.Where(q => q.Difficulty.ToLower() == lower);
+        }
+
+        return await query.CountAsync();
+    }
+
+    internal static string NormalizeDifficulty(string? difficulty)
+    {
+        if (string.IsNullOrWhiteSpace(difficulty))
+            return "Mixed";
+
+        return difficulty.Trim() switch
+        {
+            var d when d.Equals("Easy", StringComparison.OrdinalIgnoreCase) => "Easy",
+            var d when d.Equals("Medium", StringComparison.OrdinalIgnoreCase) => "Medium",
+            var d when d.Equals("Hard", StringComparison.OrdinalIgnoreCase) => "Hard",
+            var d when d.Equals("Mixed", StringComparison.OrdinalIgnoreCase) => "Mixed",
+            _ => "Mixed"
+        };
+    }
+
     private static void ValidateSchedule(DateTime? startDate, DateTime? endDate)
     {
         if (startDate.HasValue && endDate.HasValue && endDate <= startDate)
             throw new Exception("Active end time must be after the start time.");
     }
-
-    private static int ClampBonusPercent(int percent)
-        => Math.Clamp(percent, 0, 100);
 
     private static DateTime? ToUtc(DateTime? value)
     {
@@ -414,12 +466,10 @@ public class QuizBuilderService
         CorrectPoints = q.Category.CorrectPoints,
         WrongPoints = q.Category.WrongPoints,
         QuestionCount = q.QuestionCount,
+        Difficulty = string.IsNullOrWhiteSpace(q.Difficulty) ? "Mixed" : q.Difficulty,
         AssignedQuestions = q.QuizQuestions.Count,
         DurationSeconds = q.DurationSeconds,
         QuestionTimerSeconds = q.DurationSeconds,
-        UsePerQuestionTimer = q.UsePerQuestionTimer,
-        BonusTimePercent = q.BonusTimePercent,
-        BonusPoints = q.BonusPoints,
         IsActive = q.IsActive,
         StartDate = AsUtc(q.StartDate),
         EndDate = AsUtc(q.EndDate),

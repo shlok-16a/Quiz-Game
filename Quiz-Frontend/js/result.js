@@ -41,7 +41,7 @@ async function loadResult() {
     const total = data.totalCompletions ?? data.TotalCompletions ?? 0;
     document.getElementById("rank").innerText = rank
         ? `Rank : #${rank} of ${total}`
-        : `Rank : —`;
+        : `Rank : -`;
 
     const durationSeconds = Number(data.durationSeconds ?? data.DurationSeconds ?? 0);
     const mins = Math.floor(durationSeconds / 60);

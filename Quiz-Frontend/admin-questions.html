@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Admin Questions</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -227,7 +228,7 @@
                 const text = q[`option${n}`] ?? "";
                 const isCorrect = correct === n;
                 return `<li class="${isCorrect ? "correct-option" : ""}">
-                    <span class="opt-label">${n}.</span>${escapeHtml(text)}${isCorrect ? " ✓" : ""}
+                    <span class="opt-label">${n}.</span>${escapeHtml(text)}${isCorrect ? " (correct)" : ""}
                 </li>`;
             }).join("");
 

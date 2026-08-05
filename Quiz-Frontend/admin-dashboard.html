@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Admin Dashboard</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -27,9 +28,6 @@
                 <select id="filterCategoryId">
                     <option value="">All categories</option>
                 </select>
-            </div>
-            <div style="align-self:end;">
-                <button type="button" id="filterBtn">Apply</button>
             </div>
         </div>
 
@@ -83,7 +81,7 @@
 
         <div class="card">
             <h3>Most Missed Questions</h3>
-            <p class="muted">Lowest accuracy / most wrong answers — useful for catching a mis-tagged correct option.</p>
+            <p class="muted">Lowest accuracy / most wrong answers - useful for catching a mis-tagged correct option.</p>
             <table>
                 <thead>
                     <tr>
@@ -198,7 +196,6 @@
             : `<tr><td colspan="8" class="muted">No answer data yet. Play some quizzes first.</td></tr>`;
     }
 
-    document.getElementById("filterBtn").onclick = () => loadReport().catch(err => alert(err.message));
     document.getElementById("filterCategoryId").onchange = () => loadReport().catch(err => alert(err.message));
 
     (async () => {

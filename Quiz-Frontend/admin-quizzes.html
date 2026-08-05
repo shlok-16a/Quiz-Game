@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Make Quiz</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -41,40 +42,21 @@
             <label>Rules</label>
             <textarea id="rulesText" rows="4" placeholder="e.g. No cheating, answer within time, one attempt only..."></textarea>
 
-            <label>Total Questions (target)</label>
+            <label>Questions Per User</label>
             <input id="questionCount" type="number" value="10" min="1">
 
-            <label>Timer mode</label>
-            <select id="timerMode">
-                <option value="global">Seconds per question (same for all)</option>
-                <option value="perQuestion">Timer per question (set on each question)</option>
+            <label>Difficulty</label>
+            <select id="difficulty">
+                <option value="Mixed" selected>Mixed</option>
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
             </select>
+            <p class="muted">Questions are drawn randomly from the category bank when a player starts. Unseen questions are preferred per user.</p>
 
-            <div id="globalTimerFields">
-                <label>Seconds per question</label>
-                <input id="questionTimerSeconds" type="number" value="10" min="1">
-                <p class="muted">Each question in this quiz gets this many seconds.</p>
-            </div>
-            <p id="perQuestionTimerHint" class="muted" style="display:none;">
-                Default seconds (used when adding questions). You can change each question’s timer on the Edit Questions page.
-            </p>
-            <div id="defaultTimerFields" style="display:none;">
-                <label>Default seconds for new questions</label>
-                <input id="defaultQuestionTimerSeconds" type="number" value="10" min="1">
-            </div>
-
-            <div id="thresholdBonusFields" style="display:none;">
-                <label>Bonus time threshold (%)</label>
-                <input id="bonusTimePercent" type="number" value="0" min="0" max="100">
-                <p class="muted">Correct answer within this % of that question’s timer earns bonus. 0 = disabled. Example: 50 on a 10s question = within first 5s.</p>
-
-                <label>Bonus points</label>
-                <input id="bonusPoints" type="number" value="0" min="0">
-                <p class="muted">Added on top of correct points when the bonus threshold is met.</p>
-            </div>
-            <p id="remainingTimeBonusHint" class="muted">
-                Speed bonus: remaining seconds on each correct answer are added as bonus points (e.g. answer in 2s of 10s → +8).
-            </p>
+            <label>Seconds per question</label>
+            <input id="questionTimerSeconds" type="number" value="10" min="1">
+            <p class="muted">Each question in this quiz gets this many seconds. Remaining seconds on each correct answer are added as bonus points.</p>
 
             <label>Active From (IST)</label>
             <input id="startDate" type="datetime-local">
@@ -88,7 +70,24 @@
                 Active (visible to players during schedule)
             </label>
 
-            <br><br>
+            <label>Upload CSV (optional)</label>
+            <input id="createCsvFile" type="file" accept=".csv">
+            <p class="muted">
+                Required header:
+                <br><code>QuestionText,Option1,Option2,Option3,CorrectOption,Difficulty</code>
+                <br>CorrectOption = 1, 2, or 3. Difficulty = Easy, Medium, or Hard.
+                <br>Questions are added to this category and linked to the new quiz.
+            </p>
+            <p class="muted" style="margin-top:0;">
+                Example:
+                <br><code>What is the capital of India?,Mumbai,New Delhi,Kolkata,2,Easy</code>
+            </p>
+            <p style="margin-top:0;">
+                <a href="samples/sample-questions.csv" download="sample-questions.csv">Download sample CSV</a>
+            </p>
+            <div id="createImportResult" style="margin-top:8px;"></div>
+
+            <br>
             <div class="row">
                 <button type="button" onclick="createQuiz()">Create</button>
                 <button type="button" class="secondary" onclick="hideCreate()">Cancel</button>
@@ -107,32 +106,29 @@
 
     function showCreate() {
         document.getElementById("createCard").style.display = "block";
+        document.getElementById("createImportResult").innerHTML = "";
         updateCategoryPoints();
     }
 
     function hideCreate() {
         document.getElementById("createCard").style.display = "none";
+        document.getElementById("createCsvFile").value = "";
+        document.getElementById("createImportResult").innerHTML = "";
     }
 
-    function formatQuestionTimer(q) {
-        if (q.usePerQuestionTimer) {
-            return "Per question (custom)";
-        }
-        const s = Number(q.durationSeconds) || 0;
-        return `${s} sec / question`;
-    }
+    async function importCsvForQuiz(quizId, file) {
+        const formData = new FormData();
+        formData.append("file", file);
 
-    function syncTimerModeUi() {
-        const perQuestion = document.getElementById("timerMode").value === "perQuestion";
-        document.getElementById("globalTimerFields").style.display = perQuestion ? "none" : "block";
-        document.getElementById("perQuestionTimerHint").style.display = perQuestion ? "block" : "none";
-        document.getElementById("defaultTimerFields").style.display = perQuestion ? "block" : "none";
-        document.getElementById("thresholdBonusFields").style.display = perQuestion ? "block" : "none";
-        document.getElementById("remainingTimeBonusHint").style.display = perQuestion ? "none" : "block";
-        if (perQuestion) {
-            document.getElementById("defaultQuestionTimerSeconds").value =
-                document.getElementById("questionTimerSeconds").value || 10;
+        const response = await fetch(`${API_BASE_URL}/api/QuizBuilder/${quizId}/import`, {
+            method: "POST",
+            body: formData
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.title || data.message || (typeof data === "string" ? data : "") || "CSV import failed");
         }
+        return data;
     }
 
     function updateCategoryPoints() {
@@ -172,24 +168,13 @@
             return;
         }
 
-        const usePerQuestionTimer = document.getElementById("timerMode").value === "perQuestion";
-        const durationSeconds = usePerQuestionTimer
-            ? Number(document.getElementById("defaultQuestionTimerSeconds").value)
-            : Number(document.getElementById("questionTimerSeconds").value);
-
         const body = {
             title: document.getElementById("title").value.trim(),
             categoryId: Number(document.getElementById("categoryId").value),
             rulesText: document.getElementById("rulesText").value.trim(),
             questionCount: Number(document.getElementById("questionCount").value),
-            durationSeconds,
-            usePerQuestionTimer,
-            bonusTimePercent: usePerQuestionTimer
-                ? (Number(document.getElementById("bonusTimePercent").value) || 0)
-                : 0,
-            bonusPoints: usePerQuestionTimer
-                ? (Number(document.getElementById("bonusPoints").value) || 0)
-                : 0,
+            difficulty: document.getElementById("difficulty").value,
+            durationSeconds: Number(document.getElementById("questionTimerSeconds").value),
             isActive: document.getElementById("isActive").checked,
             startDate: istLocalToIso(startDate),
             endDate: istLocalToIso(endDate)
@@ -200,10 +185,33 @@
             return;
         }
 
+        const csvFile = document.getElementById("createCsvFile").files[0];
+
         try {
             const created = await apiSend("/api/QuizBuilder", "POST", body);
+
+            if (csvFile) {
+                try {
+                    const result = await importCsvForQuiz(created.id, csvFile);
+                    const failed = Number(result.failed) || 0;
+                    const imported = Number(result.imported) || 0;
+                    if (failed > 0) {
+                        alert(`Quiz created. Imported ${imported} question(s). ${failed} row(s) failed — see Edit Settings for details.`);
+                    }
+                    location.href = `admin-quiz-edit.html?id=${created.id}`;
+                    return;
+                } catch (importErr) {
+                    document.getElementById("createImportResult").innerHTML =
+                        `<p class="ok">Quiz created.</p>` +
+                        `<p class="err">CSV import failed: ${escapeHtml(importErr.message)}</p>` +
+                        `<p class="muted"><a href="admin-quiz-edit.html?id=${created.id}">Open quiz</a> to retry the upload.</p>`;
+                    await loadQuizzes();
+                    return;
+                }
+            }
+
             hideCreate();
-            window.location.href = `admin-quiz-edit.html?id=${created.id}`;
+            await loadQuizzes();
         } catch (err) {
             alert(err.message);
         }
@@ -234,15 +242,15 @@
         const start = parseUtcDate(q.startDate);
 
         if (end && now > end.getTime()) {
-            return "🏁 Completed";
+            return "Completed";
         }
         if (!q.isActive) {
-            return "⏸ Inactive";
+            return "Inactive";
         }
         if (start && now < start.getTime()) {
-            return "🕒 Scheduled";
+            return "Scheduled";
         }
-        return "✅ Active";
+        return "Active";
     }
 
     async function loadQuizzes() {
@@ -261,18 +269,15 @@
             <div class="card">
                 <h3>${q.title}</h3>
                 <p>Category: <strong>${q.categoryName}</strong></p>
-                <p>Questions: ${q.assignedQuestions} / ${q.questionCount}</p>
-                <p>Timer: ${formatQuestionTimer(q)}</p>
-                ${q.usePerQuestionTimer
-                    ? (Number(q.bonusTimePercent) > 0 && Number(q.bonusPoints) > 0
-                        ? `<p>Bonus: +${q.bonusPoints} if correct within ${q.bonusTimePercent}% of question time</p>`
-                        : "")
-                    : `<p>Bonus: remaining seconds on each correct answer</p>`}
+                <p>Questions per user: ${q.questionCount}</p>
+                <p>Difficulty: ${escapeHtml(q.difficulty || "Mixed")}</p>
+                <p>Timer: ${Number(q.durationSeconds) || 0} sec / question</p>
+                <p>Bonus: remaining seconds on each correct answer</p>
                 <p>Active From: ${formatIst(q.startDate)}</p>
                 <p>Active Until: ${formatIst(q.endDate)}</p>
                 <p>Status: ${status}</p>
                 <div class="row">
-                    <button type="button" onclick="location.href='admin-quiz-edit.html?id=${q.id}'">Edit Questions</button>
+                    <button type="button" onclick="location.href='admin-quiz-edit.html?id=${q.id}'">Edit Settings</button>
                     ${isCompleted ? "" : `
                     <button type="button" class="secondary" onclick="toggleActive(${q.id}, ${q.isActive})">
                         ${q.isActive ? "Deactivate" : "Activate"}
@@ -287,8 +292,6 @@
     (async () => {
         await loadCategories();
         document.getElementById("categoryId").onchange = updateCategoryPoints;
-        document.getElementById("timerMode").onchange = syncTimerModeUi;
-        syncTimerModeUi();
         await loadQuizzes();
     })().catch(err => alert(err.message));
 </script>

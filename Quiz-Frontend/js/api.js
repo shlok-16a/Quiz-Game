@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:5260";
+const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:5260`;
 
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "admin123";
@@ -86,7 +86,7 @@ function isoToIstLocal(iso) {
 /** Format UTC ISO for display in IST. */
 function formatIst(iso) {
     const d = parseUtcDate(iso);
-    if (!d) return "—";
+    if (!d) return "-";
     const formatted = d.toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata",
         day: "2-digit",

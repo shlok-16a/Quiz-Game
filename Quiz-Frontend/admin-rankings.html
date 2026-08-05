@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Rankings</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -25,13 +26,13 @@
             <div>
                 <label for="categorySelect">Select category</label>
                 <select id="categorySelect">
-                    <option value="">— Choose a category —</option>
+                    <option value="">Choose a category</option>
                 </select>
             </div>
             <div>
                 <label for="quizSelect">Select quiz</label>
                 <select id="quizSelect" disabled>
-                    <option value="">— Choose a quiz —</option>
+                    <option value="">Choose a quiz</option>
                 </select>
             </div>
         </div>
@@ -103,7 +104,7 @@
         hint.style.display = "none";
 
         if (!categoryId) {
-            resetQuizSelect("— Choose a quiz —");
+            resetQuizSelect("Choose a quiz");
             return;
         }
 
@@ -111,7 +112,7 @@
             .filter(q => String(q.categoryId) === String(categoryId))
             .sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
 
-        select.innerHTML = `<option value="">— Choose a quiz —</option>`;
+        select.innerHTML = `<option value="">Choose a quiz</option>`;
         quizzes.forEach(q => {
             const opt = document.createElement("option");
             opt.value = q.id;
@@ -163,7 +164,7 @@
         const data = await apiGet(`/api/Admin/leaderboard/${quizId}`);
         document.getElementById("quizTitle").textContent = data.quizTitle;
         document.getElementById("quizMeta").textContent =
-            `${data.categoryName || "—"} · ${data.totalCompletions} completion${data.totalCompletions === 1 ? "" : "s"}`;
+            `${data.categoryName || "-"} - ${data.totalCompletions} completion${data.totalCompletions === 1 ? "" : "s"}`;
         summary.style.display = "block";
 
         const entries = data.entries || [];

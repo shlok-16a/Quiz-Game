@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Quiz</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -159,9 +160,9 @@
             if (option < 1 || option > 3) return;
             clearOptionStyles();
             optionButtons[option - 1].classList.add("option-correct");
-            showFeedbackBanner("neutral", "Time up — correct answer highlighted");
+            showFeedbackBanner("neutral", "Time up - correct answer highlighted");
             statusEl.style.color = "#4b5563";
-            statusEl.innerText = "Time up — correct answer highlighted";
+            statusEl.innerText = "Time up - correct answer highlighted";
         }
 
         function wait(ms) {
@@ -203,7 +204,7 @@
                 updateTimerLabel();
                 if (remainingSeconds <= 0) {
                     stopQuestionTimer();
-                    statusEl.innerText = "Time up — skipping...";
+                    statusEl.innerText = "Time up - skipping...";
                     submitAnswer(0);
                 }
             }, 1000);
@@ -291,7 +292,7 @@
                     }
                     await wait(isCorrect ? 1600 : 1800);
                 } else {
-                    // Timed out / skipped — reveal correct answer before moving on
+                    // Timed out / skipped - reveal correct answer before moving on
                     showCorrectAnswer(correctOption);
                     await wait(1400);
                 }

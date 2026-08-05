@@ -8,13 +8,10 @@ public class UpdateQuizDto
 
     public int QuestionCount { get; set; }
 
+    /// <summary>Easy / Medium / Hard / Mixed.</summary>
+    public string Difficulty { get; set; } = "Mixed";
+
     public int DurationSeconds { get; set; }
-
-    public bool UsePerQuestionTimer { get; set; }
-
-    public int BonusTimePercent { get; set; }
-
-    public int BonusPoints { get; set; }
 
     public bool IsActive { get; set; }
 
